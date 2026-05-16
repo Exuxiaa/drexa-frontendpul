@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "@/app/core/store/firebase";
+import { auth } from "@/features/core/store/firebase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
