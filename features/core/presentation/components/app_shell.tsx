@@ -78,11 +78,12 @@ function Dropdown({ items, style }: { items: MenuItem[], style?: CSSProperties }
   );
 }
 
-export function TopNav({ authed = false }: { authed?: boolean }) {
+export function TopNav() {
   const [open, setOpen] = useState<string | null>(null);
   const [lastOpen, setLastOpen] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [indicator, setIndicator] = useState({ left: 0, opacity: 0 });
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const navRef = React.useRef<HTMLElement>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -91,6 +92,13 @@ export function TopNav({ authed = false }: { authed?: boolean }) {
     const onS = () => setScrolled(window.scrollY > 8);
     window.addEventListener("scroll", onS); return () => window.removeEventListener("scroll", onS);
   }, []);
+
+  useEffect(() => {
+    // Check if the user is authenticated by attempting a silent refresh
+    api.post("/auth/refresh", undefined, { retryOnUnauthorized: false })
+      .then(() => setAuthed(true))
+      .catch(() => setAuthed(false));
+  }, [pathname]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -109,7 +117,7 @@ export function TopNav({ authed = false }: { authed?: boolean }) {
     }
   }, [open]);
 
-  const onLogout = async () => { await api.post("/auth/logout").catch(() => {}); router.replace("/login"); };
+  const onLogout = async () => { await api.post("/auth/logout").catch(() => {}); setAuthed(false); router.replace("/login"); };
 
   const activeMenu = MENUS.find(m => m.id === (open || lastOpen)) || MENUS[0];
 
@@ -209,7 +217,7 @@ export function Footer() {
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
-      <TopNav authed />
+      <TopNav />
       <main>{children}</main>
       <Footer />
     </div>

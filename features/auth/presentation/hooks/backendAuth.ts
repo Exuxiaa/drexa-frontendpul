@@ -18,3 +18,8 @@ export async function registerWithBackend(
 ): Promise<BackendAuthResponse> {
   return api.post<BackendAuthResponse>("/auth/register", { email, password, username }, { retryOnUnauthorized: false });
 }
+
+/** Google native login. The gateway validates the Google ID token and sets session cookies. */
+export async function loginWithGoogleBackend(idToken: string): Promise<BackendAuthResponse> {
+  return api.post<BackendAuthResponse>("/auth/google", { id_token: idToken }, { retryOnUnauthorized: false });
+}

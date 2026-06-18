@@ -45,7 +45,7 @@ function Field({ label, type = "text", value, onChange, placeholder, icon, right
 export function LoginPage() {
   const router = useRouter();
   const emailAuth = useEmailAuth();
-  const googleAuth = useGoogleAuth();
+  const googleAuth = useGoogleAuth(() => router.push("/portfolio"));
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
@@ -57,11 +57,6 @@ export function LoginPage() {
     if (!valid || busy) return;
     const session = await emailAuth.login(email, pw);
     if (session) router.push("/portfolio");
-  };
-  const onGoogle = async () => {
-    if (busy) return;
-    const ok = await googleAuth.login();
-    if (ok) router.push("/portfolio");
   };
   const err = emailAuth.error || googleAuth.error;
 
@@ -79,7 +74,7 @@ export function LoginPage() {
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 28 }}>
-              <button className="oauth-btn" onClick={onGoogle} disabled={busy}><GoogleG /> {googleAuth.isLoading ? "Connecting…" : "Continue with Google"}</button>
+              <button className="oauth-btn" onClick={() => googleAuth.login()} disabled={busy}><GoogleG /> {googleAuth.isLoading ? "Connecting…" : "Continue with Google"}</button>
               <button className="oauth-btn" disabled={busy}><Icon name="apple" size={19} color="var(--text-hi)" stroke={1.7} /> Continue with Apple</button>
             </div>
 

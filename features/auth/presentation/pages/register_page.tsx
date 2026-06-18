@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon, Logo, DeltaPill, Sparkline, series } from "@/features/core/presentation/components/drexa_kit";
 import { useRegister } from "@/features/auth/presentation/hooks/useRegister";
+import { useGoogleAuth } from "@/features/auth/presentation/hooks/useGoogleAuth";
 
 function GoogleG({ size = 19 }: { size?: number }) {
   return (
@@ -56,6 +57,7 @@ function Field({ label, type = "text", value, onChange, placeholder, icon, right
 export function RegisterPage() {
   const router = useRouter();
   const { register: registerUser, isLoading, error } = useRegister();
+  const googleAuth = useGoogleAuth(() => router.push("/portfolio"));
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
@@ -88,7 +90,7 @@ export function RegisterPage() {
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 28 }}>
-              <button className="oauth-btn"><GoogleG /> Continue with Google</button>
+              <button className="oauth-btn" onClick={() => googleAuth.login()} disabled={googleAuth.isLoading}><GoogleG /> {googleAuth.isLoading ? "Connecting…" : "Continue with Google"}</button>
               <button className="oauth-btn"><Icon name="apple" size={19} color="var(--text-hi)" stroke={1.7} /> Continue with Apple</button>
             </div>
 
