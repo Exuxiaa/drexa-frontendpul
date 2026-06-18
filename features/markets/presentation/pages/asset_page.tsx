@@ -111,6 +111,7 @@ export function AssetPage({ sym }: { sym: string }) {
   // Update with WebSocket data
   useEffect(() => {
     if (tickers[sym]) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCoin(c => ({ ...c, ...tickers[sym] }));
     }
   }, [tickers, sym]);

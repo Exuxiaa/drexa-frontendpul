@@ -19,6 +19,7 @@ export function useBinanceKlines(sym: string, tf: string, limit = 120) {
     const interval = TF_TO_INTERVAL[tf] ?? "1h";
     let active = true;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setCandles([]);
 

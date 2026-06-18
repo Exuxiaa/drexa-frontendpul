@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface TickerData {
   sym: string;
@@ -127,6 +127,7 @@ export function useMarketStream() {
     statusSubscribers.add(setIsConnected);
 
     // Initial state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTickers(sharedTickers);
     setIsConnected(sharedIsConnected);
 

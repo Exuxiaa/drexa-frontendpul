@@ -232,6 +232,7 @@ export function Donut({ slices, size = 188, thickness = 0.58 }: { slices: { valu
   const R = size / 2, r = R * thickness, cx = R, cy = R;
   let ang = -Math.PI / 2;
   const arc = (frac: number) => {
+    // eslint-disable-next-line react-hooks/immutability
     const a0 = ang, a1 = ang + frac * Math.PI * 2; ang = a1;
     const big = frac > 0.5 ? 1 : 0;
     const p = (a: number, rad: number) => `${cx + rad * Math.cos(a)} ${cy + rad * Math.sin(a)}`;

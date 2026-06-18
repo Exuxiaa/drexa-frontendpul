@@ -93,6 +93,7 @@ export function TopNav({ authed = false }: { authed?: boolean }) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setLastOpen(open);
     
     if (!open) {

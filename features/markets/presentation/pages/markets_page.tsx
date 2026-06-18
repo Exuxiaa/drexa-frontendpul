@@ -108,6 +108,7 @@ export function MarketsPage() {
 
   const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
   const pageRows = rows.slice((page - 1) * perPage, page * perPage);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [filter, q, tf]);
 
   const topGainer = [...MK].sort((a, b) => b.ch - a.ch)[0];

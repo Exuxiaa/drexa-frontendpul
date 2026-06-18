@@ -45,8 +45,8 @@ function QR({ seed, size = 132 }: { seed: number; size?: number }) {
     if (finder) continue;
     if (r() > 0.55) blocks.push(<rect key={x + "-" + y} x={x * cell} y={y * cell} width={cell} height={cell} fill="#0A0F1C" />);
   }
-  const Finder = ({ fx, fy }: { fx: number; fy: number }) => (
-    <g>
+  const renderFinder = (fx: number, fy: number) => (
+    <g key={`finder-${fx}-${fy}`}>
       <rect x={fx * cell} y={fy * cell} width={cell * 7} height={cell * 7} fill="#0A0F1C" />
       <rect x={(fx + 1) * cell} y={(fy + 1) * cell} width={cell * 5} height={cell * 5} fill="#fff" />
       <rect x={(fx + 2) * cell} y={(fy + 2) * cell} width={cell * 3} height={cell * 3} fill="#0A0F1C" />
@@ -55,7 +55,7 @@ function QR({ seed, size = 132 }: { seed: number; size?: number }) {
   return (
     <div style={{ background: "#fff", borderRadius: "var(--r-md)", padding: 10 }}>
       <svg width={size} height={size} style={{ display: "block" }}>
-        {blocks}<Finder fx={0} fy={0} /><Finder fx={n - 7} fy={0} /><Finder fx={0} fy={n - 7} />
+        {blocks}{renderFinder(0, 0)}{renderFinder(n - 7, 0)}{renderFinder(0, n - 7)}
       </svg>
     </div>
   );

@@ -28,6 +28,7 @@ export function useCryptoAddress(currency: string) {
 
   useEffect(() => {
     if (!isCryptoSupported(currency)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
       setError(null);
       setLoading(false);

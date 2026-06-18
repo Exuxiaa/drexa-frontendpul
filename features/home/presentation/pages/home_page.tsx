@@ -11,7 +11,6 @@ import {
   COINS, DONUT_COLORS, ACTIVITY, portfolioTotals, coinOf,
 } from '@/features/core/domain/data/mock_data';
 import { series, fmtUSD, fmtNum } from '@/features/core/domain/data/trading_utils';
-import { api } from '@/lib/api';
 import { useMarketStream } from '@/features/core/presentation/hooks/use_market_stream';
 import { useWalletData } from '@/features/wallet/presentation/hooks/useWalletData';
 

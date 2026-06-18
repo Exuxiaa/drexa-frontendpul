@@ -9,6 +9,7 @@ import {
   Icon, Card, Container, CoinBadge, Delta, DeltaPill, Sparkline, AreaChart,
   COINS, COIN, fUSD, fCompact, series,
 } from "@/features/core/presentation/components/drexa_kit";
+import { motion } from "motion/react";
 
 const thL: CSSProperties = { textAlign: "left", padding: "16px 24px", fontWeight: 600 };
 const thR: CSSProperties = { textAlign: "right", padding: "16px 24px", fontWeight: 600 };
@@ -42,7 +43,7 @@ function Hero() {
         <div style={{ position: "absolute", width: 520, height: 420, right: "-140px", top: "60px", background: "rgba(13,148,136,0.10)", borderRadius: "50%", filter: "blur(120px)" }} />
       </div>
       <Container style={{ position: "relative", padding: "88px 32px 80px", display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 56, alignItems: "center" }}>
-        <div>
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 13px 6px 8px", borderRadius: "var(--r-pill)", background: "var(--card)", border: "1px solid var(--border)", font: "600 12.5px var(--font)", color: "var(--text-2)" }}>
             <span style={{ padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--up-soft)", color: "var(--up)", font: "700 11px var(--font)" }}>NEW</span>
             Earn up to 5.2% APY on your stablecoins
@@ -66,8 +67,8 @@ function Hero() {
               </span>
             ))}
           </div>
-        </div>
-        <div style={{ position: "relative", height: 420 }}>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }} style={{ position: "relative", height: 420 }}>
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Card pad={26} style={{ width: 400, boxShadow: "var(--shadow-pop)" }}>
               <div style={{ font: "500 13px var(--font)", color: "var(--text-3)" }}>Portfolio balance</div>
@@ -92,14 +93,14 @@ function Hero() {
             <span style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--up-soft)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={18} color="var(--up)" stroke={2.6} /></span>
             <div><div style={{ font: "600 13px var(--font)", color: "var(--text-hi)" }}>Bought 0.05 BTC</div><div style={{ font: "500 11px var(--font)", color: "var(--text-3)" }}>Instantly settled</div></div>
           </div>
-        </div>
+        </motion.div>
       </Container>
     </section>
   );
 }
 
 function FeaturedAssets() {
-  const baseFeat = ["BTC", "ETH", "SOL", "LINK", "USDC", "ADA", "XRP", "DOT"].map(s => COIN(s)).filter(Boolean) as any[];
+  const baseFeat = ["BTC", "ETH", "SOL", "LINK", "USDC", "ADA", "XRP", "DOT"].map(s => COIN(s)).filter(Boolean) as NonNullable<ReturnType<typeof COIN>>[];
   const feat = [...baseFeat, ...baseFeat, ...baseFeat];
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -176,8 +177,10 @@ function FeaturedAssets() {
   return (
     <section style={{ padding: "60px 0" }}>
       <Container>
-        <SectionHead eyebrow="Featured" title="Popular assets to watch" action={<TextLink>View all markets</TextLink>} />
-        <div style={{ 
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5 }}>
+          <SectionHead eyebrow="Featured" title="Popular assets to watch" action={<TextLink>View all markets</TextLink>} />
+        </motion.div>
+        <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.2 }} style={{ 
           overflow: "hidden", 
           margin: "0 -16px", 
           padding: "16px",
@@ -214,7 +217,7 @@ function FeaturedAssets() {
               </Link>
             ))}
           </div>
-        </div>
+        </motion.div>
       </Container>
     </section>
   );
@@ -232,8 +235,10 @@ function MarketOverview() {
   return (
     <section style={{ padding: "60px 0" }}>
       <Container>
-        <SectionHead eyebrow="Markets" title="Market overview" sub="A real-time look at the assets moving the market today." action={<TextLink>Open market screener</TextLink>} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5 }}>
+          <SectionHead eyebrow="Markets" title="Market overview" sub="A real-time look at the assets moving the market today." action={<TextLink>Open market screener</TextLink>} />
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5, delay: 0.1 }} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
           {stats.map(s => (
             <Card key={s.label} pad={20}>
               <div style={{ font: "500 13px var(--font)", color: "var(--text-3)" }}>{s.label}</div>
@@ -243,9 +248,10 @@ function MarketOverview() {
               </div>
             </Card>
           ))}
-        </div>
-        <Card pad={0} style={{ overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5, delay: 0.2 }}>
+          <Card pad={0} style={{ overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr style={{ font: "600 11.5px var(--font)", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>
               <th style={thL}>Name</th><th style={thR}>Price</th><th style={thR}>24h</th><th style={thR}>Market cap</th><th style={thR}>Last 7 days</th><th style={{ width: 110 }}></th>
             </tr></thead>
@@ -269,6 +275,7 @@ function MarketOverview() {
             </tbody>
           </table>
         </Card>
+        </motion.div>
       </Container>
     </section>
   );
@@ -281,20 +288,22 @@ function TopMovers() {
   return (
     <section style={{ padding: "60px 0" }}>
       <Container>
-        <SectionHead eyebrow="24h Movers" title="Today's top movers"
-          action={
-            <div style={{ display: "flex", gap: 4, background: "var(--card)", padding: 4, borderRadius: "var(--r-pill)", border: "1px solid var(--border)" }}>
-              {([["gainers", "Top Gainers"], ["losers", "Top Losers"]] as [string, string][]).map(([id, label]) => (
-                <button key={id} onClick={() => setTab(id)} style={{
-                  padding: "8px 18px", borderRadius: "var(--r-pill)", border: "none", cursor: "pointer",
-                  background: tab === id ? "var(--blue)" : "transparent", color: tab === id ? "#fff" : "var(--text-2)", font: "600 13.5px var(--font)",
-                }}>{label}</button>
-              ))}
-            </div>
-          } />
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5 }}>
+          <SectionHead eyebrow="24h Movers" title="Today's top movers"
+            action={
+              <div style={{ display: "flex", gap: 4, background: "var(--card)", padding: 4, borderRadius: "var(--r-pill)", border: "1px solid var(--border)" }}>
+                {([["gainers", "Top Gainers"], ["losers", "Top Losers"]] as [string, string][]).map(([id, label]) => (
+                  <button key={id} onClick={() => setTab(id)} style={{
+                    padding: "8px 18px", borderRadius: "var(--r-pill)", border: "none", cursor: "pointer",
+                    background: tab === id ? "var(--blue)" : "transparent", color: tab === id ? "#fff" : "var(--text-2)", font: "600 13.5px var(--font)",
+                  }}>{label}</button>
+                ))}
+              </div>
+            } />
+        </motion.div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {list.map(c => (
-            <div key={c.sym} className="lift" onClick={() => router.push("/trade?sym=" + c.sym)}>
+          {list.map((c, i) => (
+            <motion.div key={c.sym} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.4, delay: i * 0.1 }} className="lift" onClick={() => router.push("/trade?sym=" + c.sym)}>
               <Card pad={20} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 16 }}>
                 <CoinBadge sym={c.sym} size={44} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -306,7 +315,7 @@ function TopMovers() {
                   <div style={{ marginTop: 6 }}><Delta v={c.ch} size={13} /></div>
                 </div>
               </Card>
-            </div>
+            </motion.div>
           ))}
         </div>
       </Container>
@@ -329,7 +338,7 @@ function PortfolioPreview() {
     <section style={{ padding: "60px 0" }}>
       <Container>
         <div style={{ display: "grid", gridTemplateColumns: "0.95fr 1.05fr", gap: 56, alignItems: "center" }}>
-          <div>
+          <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.6 }}>
             <SectionHead eyebrow="Portfolio" title="Your whole portfolio, beautifully clear" sub="Drexa brings every holding together so you always know exactly where you stand." />
             <div style={{ display: "flex", flexDirection: "column", gap: 22, marginTop: 4 }}>
               {feats.map(([t, d]) => (
@@ -339,8 +348,9 @@ function PortfolioPreview() {
                 </div>
               ))}
             </div>
-          </div>
-          <Card pad={28} style={{ boxShadow: "var(--shadow-pop)" }}>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.6, delay: 0.2 }}>
+            <Card pad={28} style={{ boxShadow: "var(--shadow-pop)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
               <div><div style={{ font: "500 13px var(--font)", color: "var(--text-3)" }}>Total balance</div><div style={{ font: "600 32px var(--mono)", color: "var(--text-hi)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>$21,154.13</div></div>
               <DeltaPill v={10.62} />
@@ -359,6 +369,7 @@ function PortfolioPreview() {
               ))}
             </div>
           </Card>
+          </motion.div>
         </div>
       </Container>
     </section>
@@ -375,14 +386,18 @@ function Security() {
   return (
     <section style={{ padding: "60px 0" }}>
       <Container>
-        <SectionHead eyebrow="Security" title="Built to protect your assets" sub="Security isn't a feature — it's the foundation. Here's how we keep your crypto safe." />
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.5 }}>
+          <SectionHead eyebrow="Security" title="Built to protect your assets" sub="Security isn't a feature — it's the foundation. Here's how we keep your crypto safe." />
+        </motion.div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-          {items.map(([ic, t, d]) => (
-            <Card key={t} pad={24}>
+          {items.map(([ic, t, d], i) => (
+            <motion.div key={t} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.4, delay: i * 0.1 }} style={{ height: "100%" }}>
+              <Card pad={24} style={{ height: "100%" }}>
               <span style={{ width: 52, height: 52, borderRadius: "var(--r-md)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--up-soft)", marginBottom: 18 }}><Icon name={ic} size={25} color="var(--up)" /></span>
               <div style={{ font: "600 17px var(--font)", color: "var(--text-hi)", letterSpacing: "-.01em" }}>{t}</div>
               <p style={{ font: "500 13.5px var(--font)", color: "var(--text-2)", lineHeight: 1.55, marginTop: 8 }}>{d}</p>
-            </Card>
+              </Card>
+            </motion.div>
           ))}
         </div>
       </Container>
@@ -395,7 +410,7 @@ function CTA() {
   return (
     <section style={{ padding: "60px 0 20px" }}>
       <Container>
-        <div style={{ position: "relative", overflow: "hidden", borderRadius: "var(--r-xl)", border: "1px solid var(--border-strong)", background: "linear-gradient(135deg, rgba(26,111,212,0.16), rgba(13,148,136,0.06))", padding: "64px 48px", textAlign: "center" }}>
+        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} whileInView={{ opacity: 1, scale: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.6 }} style={{ position: "relative", overflow: "hidden", borderRadius: "var(--r-xl)", border: "1px solid var(--border-strong)", background: "linear-gradient(135deg, rgba(26,111,212,0.16), rgba(13,148,136,0.06))", padding: "64px 48px", textAlign: "center" }}>
           <div style={{ position: "absolute", width: 520, height: 360, left: "50%", top: "-180px", transform: "translateX(-50%)", background: "rgba(26,111,212,0.18)", borderRadius: "50%", filter: "blur(110px)", pointerEvents: "none" }} />
           <div style={{ position: "relative" }}>
             <h2 style={{ font: "700 40px var(--font)", color: "var(--text-hi)", letterSpacing: "-.02em", lineHeight: 1.1 }}>Start your crypto journey today</h2>
@@ -405,7 +420,7 @@ function CTA() {
               <button onClick={() => router.push("/markets")} className="btn-ghost" style={{ height: 52, padding: "0 28px", borderRadius: "var(--r-md)", border: "1px solid var(--border-strong)", background: "var(--card)", color: "var(--text-hi)", font: "600 15.5px var(--font)", cursor: "pointer" }}>Explore markets</button>
             </div>
           </div>
-        </div>
+        </motion.div>
       </Container>
     </section>
   );

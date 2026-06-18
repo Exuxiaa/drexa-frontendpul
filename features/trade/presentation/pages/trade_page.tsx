@@ -121,15 +121,6 @@ function OrderTicket({ coin }: { coin: Coin }) {
   const [limit, setLimit] = useState((coin.price * 1.02).toFixed(coin.price < 10 ? 4 : 2));
   const [amount, setAmount] = useState("");
   const [pct, setPct] = useState(0);
-  // Seed the ticket from the live price only when the pair changes — not on
-  // every price tick, otherwise live updates would clobber the user's input.
-  useEffect(() => {
-    setPrice(coin.price.toFixed(coin.price < 10 ? 4 : 2));
-    setStop((coin.price * 0.98).toFixed(coin.price < 10 ? 4 : 2));
-    setLimit((coin.price * 1.02).toFixed(coin.price < 10 ? 4 : 2));
-    setAmount(""); setPct(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coin.sym]);
 
   const isBuy = side === "buy";
   const balQuote = 12480.00, balBase = 0.1312;
@@ -345,7 +336,7 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
             <OrdersPanel />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <OrderTicket coin={coin} />
+            <OrderTicket key={coin.sym} coin={coin} />
             <OrderBook price={coin.price} />
           </div>
         </div>
