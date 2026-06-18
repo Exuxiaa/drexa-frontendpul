@@ -8,8 +8,7 @@ import {
   btnBrand, btnGhost, linkBtn,
 } from '@/features/core/presentation/components/primitives';
 import { ABOUT, coinOf, holdingRows } from '@/features/core/domain/data/mock_data';
-import { series, fmtUSD, fmtNum, fmtCompact } from '@/features/core/domain/data/trading_utils';
-import { fetchMarkets, fetchChartData, cgToCoinData } from '@/lib/coingecko';
+import { fmtUSD, fmtNum, fmtCompact } from '@/features/core/domain/data/trading_utils';
 import { useMarketStream } from '@/features/core/presentation/hooks/use_market_stream';
 import type { CoinData } from '@/features/core/domain/model';
 
@@ -86,51 +85,32 @@ export function AssetPage({ sym }: { sym: string }) {
   const mockCoin = coinOf(sym);
 
   const [coin, setCoin] = useState<CoinData>(mockCoin);
-  const [chartData, setChartData] = useState<number[]>(
-    () => series(mockCoin.seed + 5 * 3, 70, 0.05, mockCoin.price * 0.9)
-  );
-  const [chartLoading, setChartLoading] = useState(false);
+  
+  // Backend doesn't support klines/history yet, so we just flatline the current price
+  const [chartData, setChartData] = useState<number[]>([]);
+  const chartLoading = false;
   const [range, setRange] = useState('1W');
   const ranges = ['1H', '1D', '1W', '1M', '1Y'];
 
-  const curveUp = chartData.length > 1 && chartData[chartData.length - 1] >= chartData[0];
+  const curveUp = true;
   const hold = holdingRows().find(h => h.sym === sym);
 
   const { tickers } = useMarketStream();
 
-  // Fetch live price + stats on mount
-  useEffect(() => {
-    fetchMarkets()
-      .then(data => {
-        const live = data.map(cgToCoinData).find(c => c.sym === sym);
-        if (live) setCoin(live);
-      })
-      .catch(() => {});
-  }, [sym]);
-
-  // Update with WebSocket data
+  // Update with WebSocket live ticker data
   useEffect(() => {
     if (tickers[sym]) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCoin(c => ({ ...c, ...tickers[sym] }));
+      setCoin(c => ({ 
+        ...c, 
+        price: tickers[sym].price || c.price,
+        ch: tickers[sym].ch || c.ch,
+        vol: tickers[sym].vol || c.vol,
+      }));
+      setChartData([tickers[sym].price || mockCoin.price]);
+    } else {
+      setChartData([mockCoin.price]);
     }
-  }, [tickers, sym]);
-
-  // Fetch chart data when sym or range changes
-  useEffect(() => {
-    let active = true;
-    const timer = window.setTimeout(() => setChartLoading(true), 0);
-
-    fetchChartData(sym, range)
-      .then(data => { if (active && data.length > 1) setChartData(data); })
-      .catch(() => {})
-      .finally(() => { if (active) setChartLoading(false); });
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [sym, range]);
+  }, [tickers, sym, mockCoin.price]);
 
   return (
     <TradingLayout>

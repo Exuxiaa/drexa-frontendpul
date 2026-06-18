@@ -7,12 +7,19 @@ import {
   Icon, Container, CoinBadge, Delta,
   COINS, COIN, fUSD, fNum, fCompact, rng, type Coin,
 } from "@/features/core/presentation/components/drexa_kit";
-import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
-import { useBinanceKlines, type Candle } from "@/features/core/presentation/hooks/use_binance_klines";
+import { useMarketStream, type OrderBook as OrderBookData } from "@/features/core/presentation/hooks/use_market_stream";
 import { usePlaceOrder } from "../hooks/usePlaceOrder";
 import { useOrderBook } from "../hooks/useOrderBook";
 import type { OrderSide, OrderType } from "../../model/order";
 import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
+
+export interface Candle {
+  t: number; // open time (ms)
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
 
 function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -24,7 +31,7 @@ function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
     ro.observe(wrapRef.current); return () => ro.disconnect();
   }, []);
   if (data.length === 0) {
-    return <div ref={wrapRef} style={{ width: "100%", height: h, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", font: "500 13px var(--font)" }}>Loading chart…</div>;
+    return <div ref={wrapRef} style={{ width: "100%", height: h, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", font: "500 13px var(--font)" }}>Chart history unavailable</div>;
   }
   const padR = 64, padT = 14, padB = 24, padL = 6;
   const innerW = Math.max(10, w - padL - padR), innerH = h - padT - padB;
@@ -69,33 +76,17 @@ function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   );
 }
 
-function OrderBook({ price, pairId }: { price: number; pairId: string }) {
-  // Live depth from the Go matching engine (polled REST snapshot).
-  const { book } = useOrderBook(pairId, 12);
-
+function OrderBook({ price, ob }: { price: number, ob?: OrderBookData }) {
   const rows = useMemo(() => {
-    const hasLive = !!book && (book.bids.length > 0 || book.asks.length > 0);
-    if (hasLive) {
-      const top = (levels: { price: number; quantity: number }[]) =>
-        levels
-          .map(l => ({ p: l.price, amt: l.quantity, total: l.price * l.quantity }))
-          .sort((a, b) => b.p - a.p)
-          .slice(0, 7);
-      // asks descending (lowest sits nearest the spread), bids descending too.
-      return { asks: top(book!.asks), bids: top(book!.bids), live: true };
+    if (ob && (ob.bids.length > 0 || ob.asks.length > 0)) {
+      const mapLevels = (levels: any[]) => {
+        return levels.map(l => ({ p: l.price, amt: l.quantity, total: l.price * l.quantity })).sort((a,b) => b.p - a.p);
+      };
+      return { asks: mapLevels(ob.asks), bids: mapLevels(ob.bids) };
     }
-
-    // Fallback: synthetic depth so the panel still reads as a live book when the
-    // in-memory engine has no resting orders for this pair yet.
-    const r = rng(Math.round(price * 100) + 5);
-    const mk = (sign: number) => Array.from({ length: 7 }, (_, i) => {
-      const p = price * (1 + sign * (i + 1) * 0.0007 * (1 + r() * 0.5));
-      const amt = +(r() * 2.4 + 0.05).toFixed(4);
-      return { p, amt, total: p * amt };
-    });
-    return { asks: mk(1).sort((a, b) => b.p - a.p), bids: mk(-1).sort((a, b) => b.p - a.p), live: false };
-  }, [book, price]);
-  const maxTot = Math.max(...[...rows.asks, ...rows.bids].map(r => r.total), 1e-9);
+    return { asks: [], bids: [] };
+  }, [ob]);
+  const maxTot = Math.max(1, ...[...rows.asks, ...rows.bids].map(r => r.total));
   const Row = ({ r, side }: { r: { p: number; amt: number; total: number }; side: "ask" | "bid" }) => (
     <div style={{ position: "relative", display: "flex", justifyContent: "space-between", padding: "4px 14px", font: "500 12px var(--mono)", fontVariantNumeric: "tabular-nums" }}>
       <span style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: (r.total / maxTot * 100) + "%", background: side === "ask" ? "var(--down-soft)" : "var(--up-soft)" }} />
@@ -181,7 +172,7 @@ function OrderTicket({ coin }: { coin: Coin }) {
     if (!canSubmit) return;
     try {
       await placeOrderMutation.mutateAsync({
-        pair_id: `${coin.sym}_USDC`,
+        pair_id: `${coin.sym}_USD`,
         side: side as OrderSide,
         type: type.toLowerCase() as OrderType,
         quantity: amt,
@@ -337,18 +328,20 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
   const [pairOpen, setPairOpen] = useState(false);
   const base = COIN(sym)!;
 
-  // Live price/stats from the gateway market stream; fall back to seed data until first tick.
-  const { tickers, isConnected } = useMarketStream();
+  // Live price/stats/orderbook from the gateway market stream.
+  const { tickers, orderbooks, isConnected } = useMarketStream();
   const t = tickers[sym];
+  const ob = orderbooks[sym];
   const coin: Coin = {
     ...base,
-    price: t?.price ?? base.price,
+    price: t?.price && t.price > 0 ? t.price : base.price,
     ch: t?.ch ?? base.ch,
     vol: t?.vol ?? base.vol,
   };
 
-  // Realtime candlesticks straight from Binance (historical + live last candle).
-  const { candles: data, loading: chartLoading } = useBinanceKlines(sym, tf, 120);
+  // Backend doesn't support klines yet. Use an empty array to show "Chart history unavailable"
+  const data: Candle[] = [];
+  const chartLoading = false;
 
   const hi = t?.high ?? coin.price * 1.045;
   const lo = t?.low ?? coin.price * 0.962;
@@ -408,7 +401,7 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
           </div>
           <div data-reveal="slide-right" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <OrderTicket coin={coin} />
-            <OrderBook price={coin.price} pairId={`${sym}_USDC`} />
+            <OrderBook price={coin.price} ob={ob} />
           </div>
         </div>
       </Container>
