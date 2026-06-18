@@ -9,6 +9,8 @@ import {
 } from "@/features/core/presentation/components/drexa_kit";
 import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
 import { useBinanceKlines, type Candle } from "@/features/core/presentation/hooks/use_binance_klines";
+import { usePlaceOrder } from "../hooks/usePlaceOrder";
+import type { OrderSide, OrderType } from "../../model/order";
 import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
 function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
@@ -144,6 +146,32 @@ function OrderTicket({ coin }: { coin: Coin }) {
     if (isBuy) setAmount(((balQuote * p / 100) / px).toFixed(6));
     else setAmount((balBase * p / 100).toFixed(6));
   };
+
+  const placeOrderMutation = usePlaceOrder();
+
+  // Market orders have no price; everything else must carry one.
+  const isMarket = type === "Market";
+  const priceValue = parseFloat(price);
+  const hasValidPrice = isMarket || (Number.isFinite(priceValue) && priceValue > 0);
+  const canSubmit = amt > 0 && hasValidPrice && !placeOrderMutation.isPending;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    try {
+      await placeOrderMutation.mutateAsync({
+        pair_id: `${coin.sym}_USDC`,
+        side: side as OrderSide,
+        type: type.toLowerCase() as OrderType,
+        quantity: amt,
+        price: isMarket ? undefined : priceValue,
+      });
+      setAmount("");
+      setPct(0);
+    } catch {
+      // Error surfaced below via placeOrderMutation.error
+    }
+  };
+
   return (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 20, boxShadow: "var(--shadow-card)" }}>
       <div style={{ display: "flex", gap: 0, background: "var(--inset)", borderRadius: "var(--r-sm)", padding: 4, marginBottom: 18 }}>
@@ -191,8 +219,18 @@ function OrderTicket({ coin }: { coin: Coin }) {
             </div>
           ))}
         </div>
-        <button style={{ height: 50, borderRadius: "var(--r-md)", border: "none", cursor: "pointer", background: accent, color: "#fff", font: "700 15px var(--font)" }}>
-          {isBuy ? "Buy" : "Sell"} {coin.sym}
+        {placeOrderMutation.isError && (
+          <div style={{ font: "500 12.5px var(--font)", color: "var(--down)", textAlign: "center" }}>
+            {placeOrderMutation.error instanceof Error ? placeOrderMutation.error.message : "Order failed"}
+          </div>
+        )}
+        {placeOrderMutation.isSuccess && (
+          <div style={{ font: "500 12.5px var(--font)", color: "var(--up)", textAlign: "center" }}>
+            Order placed{placeOrderMutation.data?.Status ? ` · ${placeOrderMutation.data.Status}` : ""}
+          </div>
+        )}
+        <button onClick={handleSubmit} disabled={!canSubmit} style={{ height: 50, borderRadius: "var(--r-md)", border: "none", cursor: canSubmit ? "pointer" : "not-allowed", background: accent, color: "#fff", font: "700 15px var(--font)", opacity: canSubmit ? 1 : 0.5 }}>
+          {placeOrderMutation.isPending ? "Placing…" : `${isBuy ? "Buy" : "Sell"} ${coin.sym}`}
         </button>
       </div>
     </div>
