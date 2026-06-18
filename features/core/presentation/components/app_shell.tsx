@@ -7,7 +7,7 @@
 import React, { CSSProperties, ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Icon, Logo } from "./drexa_kit";
+import { Icon, Logo, Avatar, USER } from "./drexa_kit";
 import { api } from "@/lib/api";
 
 interface MenuItem { icon: string; title: string; sub: string; href?: string; }
@@ -78,7 +78,67 @@ function Dropdown({ items, style }: { items: MenuItem[], style?: CSSProperties }
   );
 }
 
-export function TopNav() {
+function AccountMenu({ onLogout }: { onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const links: { icon: string; title: string; sub: string; href: string }[] = [
+    { icon: "user", title: "Profile & Account", sub: "Personal info, security & KYC", href: "/profile" },
+    { icon: "overview", title: "Portfolio", sub: "Holdings, returns & allocation", href: "/portfolio" },
+    { icon: "assets", title: "Wallet", sub: "Balances, deposit & withdraw", href: "/wallet" },
+  ];
+  const tile: CSSProperties = { width: 38, height: 38, borderRadius: "var(--r-sm)", flex: "none", display: "flex", alignItems: "center", justifyContent: "center" };
+  const itemStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 13, padding: "11px 12px", borderRadius: "var(--r-md)", textDecoration: "none", width: "100%", border: "none", background: "none", cursor: "pointer", textAlign: "left" };
+  return (
+    <div style={{ position: "relative" }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button className="acct-btn" style={{
+        display: "flex", alignItems: "center", gap: 9, height: 46, padding: "0 7px 0 8px", borderRadius: "var(--r-pill)",
+        border: `1px solid ${open ? "var(--border-strong)" : "var(--border)"}`, background: open ? "var(--card)" : "transparent",
+        cursor: "pointer", transition: "background .16s, border-color .16s",
+      }}>
+        <Avatar size={32} badge />
+        <span style={{ textAlign: "left", lineHeight: 1.15 }}>
+          <span style={{ display: "block", font: "600 13px var(--font)", color: "var(--text-hi)" }}>{USER.name}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 3, font: "600 11px var(--mono)", color: "var(--up)" }}><Icon name="verified" size={11} color="var(--up)" />{USER.tier}</span>
+        </span>
+        <Icon name="chevDown" size={15} color="var(--text-3)" style={{ marginLeft: 1, transform: open ? "rotate(180deg)" : "none", transition: "transform .18s" }} />
+      </button>
+      <div style={{
+        position: "absolute", top: "100%", right: 0, paddingTop: 10, zIndex: 60,
+        opacity: open ? 1 : 0, visibility: open ? "visible" : "hidden", pointerEvents: open ? "auto" : "none",
+        transform: open ? "translateY(0)" : "translateY(-6px)", transition: "opacity 0.2s, transform 0.2s, visibility 0.2s",
+      }}>
+        <div style={{ width: 332, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-pop)", padding: 8 }}>
+          <Link href="/profile" className="dd-item" style={{ ...itemStyle, marginBottom: 2 }}>
+            <span style={{ flex: "none" }}><Avatar size={38} badge /></span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", font: "600 14px var(--font)", color: "var(--text-hi)" }}>{USER.name}</span>
+              <span style={{ display: "block", font: "500 12px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{USER.email}</span>
+            </span>
+          </Link>
+          <div style={{ height: 1, background: "var(--border)", margin: "4px 4px 6px" }} />
+          {links.map((it, i) => (
+            <Link key={i} href={it.href} className="dd-item" style={itemStyle}>
+              <span style={{ ...tile, background: "var(--blue-soft)" }}><Icon name={it.icon} size={19} color="var(--blue-hover)" /></span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", font: "600 14px var(--font)", color: "var(--text-hi)" }}>{it.title}</span>
+                <span style={{ display: "block", font: "500 12px var(--font)", color: "var(--text-3)", marginTop: 1 }}>{it.sub}</span>
+              </span>
+            </Link>
+          ))}
+          <div style={{ height: 1, background: "var(--border)", margin: "6px 4px" }} />
+          <button onClick={onLogout} className="dd-item" style={itemStyle}>
+            <span style={{ ...tile, background: "var(--down-soft)" }}><Icon name="logout" size={19} color="var(--down)" /></span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", font: "600 14px var(--font)", color: "var(--text-hi)" }}>Sign out</span>
+              <span style={{ display: "block", font: "500 12px var(--font)", color: "var(--text-3)", marginTop: 1 }}>End your current session</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TopNav({ authed = false }: { authed?: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   const [lastOpen, setLastOpen] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -157,8 +217,8 @@ export function TopNav() {
         <div style={{ flex: 1 }} />
         {authed ? (
           <>
-            <button onClick={onLogout} className="nav-ghost" style={{ height: 42, padding: "0 16px", borderRadius: "var(--r-pill)", border: "none", background: "transparent", color: "var(--text)", font: "600 14px var(--font)", cursor: "pointer" }}>Sign out</button>
-            <span style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--blue-grad)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 14px var(--font)", color: "#fff" }}>MR</span>
+            <Link href="/wallet" className="nav-ghost" title="Deposit" style={{ display: "flex", alignItems: "center", gap: 7, height: 42, padding: "0 16px", borderRadius: "var(--r-pill)", border: "1px solid var(--border)", background: "transparent", color: "var(--text)", font: "600 13.5px var(--font)", cursor: "pointer", textDecoration: "none", marginRight: 4 }}><Icon name="deposit" size={16} color="var(--text-2)" />Deposit</Link>
+            <AccountMenu onLogout={onLogout} />
           </>
         ) : (
           <>

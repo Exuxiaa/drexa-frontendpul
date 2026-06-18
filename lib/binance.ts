@@ -10,8 +10,9 @@
  *                     interval, so the caller knows when to append a new candle.
  */
 
-const REST_BASE = "https://data-api.binance.vision/api/v3";
-const WS_BASE = "wss://data-stream.binance.vision/ws";
+// Configurable via env so the candlestick source can be swapped without code changes.
+const REST_BASE = process.env.NEXT_PUBLIC_BINANCE_REST_URL || "https://data-api.binance.vision/api/v3";
+const WS_BASE = process.env.NEXT_PUBLIC_BINANCE_WS_URL || "wss://data-stream.binance.vision/ws";
 
 export interface Candle {
   t: number; // open time (ms) — identifies the candle

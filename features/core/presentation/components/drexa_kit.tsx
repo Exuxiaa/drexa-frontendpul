@@ -55,7 +55,35 @@ export const ICONS: Record<string, string> = {
   clock2:   '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   verified: '<path d="m9 12 2 2 4-4"/><path d="M12 3 4 6v6c0 4 3 7 8 9 5-2 8-5 8-9V6Z"/>',
   logout:   '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  user:     '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  phone:    '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  globe:    '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+  device:   '<rect width="16" height="12" x="4" y="2" rx="2"/><path d="M2 20h20"/><path d="M9 20v2h6v-2"/>',
+  key:      '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+  camera:   '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  edit:     '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
 };
+
+/* ============================================================ USER + AVATAR */
+export const USER = {
+  name: "Alex Morgan", email: "alex.morgan@gmail.com", initials: "AM",
+  uid: "38492017", tier: "Verified", since: "Mar 2023",
+  avatarBg: "linear-gradient(135deg,#3D8EF0,#1A6FD4)",
+};
+export function Avatar({ size = 32, badge = false }: { size?: number; badge?: boolean }) {
+  return (
+    <span style={{ position: "relative", flex: "none", display: "inline-flex" }}>
+      <span style={{ width: size, height: size, borderRadius: "50%", background: USER.avatarBg, color: "#fff",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", font: `700 ${Math.round(size * 0.4)}px var(--font)`, letterSpacing: ".01em" }}>{USER.initials}</span>
+      {badge && (
+        <span style={{ position: "absolute", right: -1, bottom: -1, width: Math.max(11, size * 0.32), height: Math.max(11, size * 0.32), borderRadius: "50%", background: "var(--up)", border: "2px solid var(--navbar)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="check" size={Math.max(6, size * 0.18)} color="#fff" stroke={3.4} />
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function Icon({ name, size = 20, color = "currentColor", stroke = 1.9, style }: {
   name: string; size?: number; color?: string; stroke?: number; style?: CSSProperties;

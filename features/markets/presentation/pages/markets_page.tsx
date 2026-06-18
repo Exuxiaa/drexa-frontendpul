@@ -9,6 +9,7 @@ import {
   fUSD, fCompact, rng, series,
 } from "@/features/core/presentation/components/drexa_kit";
 import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
+import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
 const MK_RAW = [
   { sym: "BTC", name: "Bitcoin",   price: 64182.50, ch: 2.41,  vol: 1284.3e6, mcap: 1264e9, seed: 7 },
@@ -75,6 +76,7 @@ function SortTH({ label, k, sort, setSort, align = "right", w }: { label: string
 
 export function MarketsPage() {
   const router = useRouter();
+  useScrollReveal();
   const initialF = typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("f") || "all") : "all";
   const [filter, setFilter] = useState(initialF);
   const [tf, setTf] = useState("24h");
@@ -146,14 +148,14 @@ export function MarketsPage() {
       </section>
 
       <Container style={{ padding: "36px 32px 8px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, marginBottom: 32 }}>
+        <div data-reveal="scale" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, marginBottom: 32 }}>
           <Highlight label="Top gainer" icon="gain" tint="var(--up)" coin={topGainer} metric={<DeltaPill v={topGainer.ch} />} />
           <Highlight label="Top loser" icon="loss" tint="var(--down)" coin={topLoser} metric={<DeltaPill v={topLoser.ch} />} />
           <Highlight label="Highest volume" icon="performance" tint="var(--blue-hover)" coin={topVol} metric={<span style={{ font: "600 13px var(--mono)", color: "var(--text-2)" }}>{fCompact(topVol.vol)}</span>} />
           <Highlight label="Trending" icon="alerts" tint="var(--warn)" coin={trending} metric={<DeltaPill v={trending.ch} />} />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <div data-reveal="1" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
           <div style={{ display: "flex", gap: 4, background: "var(--card)", padding: 4, borderRadius: "var(--r-pill)", border: "1px solid var(--border)" }}>
             {filters.map(([id, label]) => (
               <button key={id} onClick={() => setFilter(id)} style={{
@@ -177,7 +179,7 @@ export function MarketsPage() {
           </label>
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
+        <div data-reveal="1" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)" }}>

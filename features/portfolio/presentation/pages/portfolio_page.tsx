@@ -7,6 +7,7 @@ import {
   Container, CoinBadge, Delta, DeltaPill, Donut, AreaChart,
   COIN, fUSD, fNum, fCompact, rng,
 } from "@/features/core/presentation/components/drexa_kit";
+import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
 const PF_HOLD = [
   { sym: "BTC",  qty: 0.1312, avg: 52200 },
@@ -38,6 +39,7 @@ const PTF: [string, number, number][] = [["1W", 113, 0.05], ["1M", 131, 0.07], [
 const tdRm: CSSProperties = { textAlign: "right", padding: "14px 24px", font: "500 13.5px var(--mono)", color: "var(--text-2)", fontVariantNumeric: "tabular-nums" };
 
 export function PortfolioPage() {
+  useScrollReveal();
   const [tf, setTf] = useState("1M");
   const pf = pfCompute();
   const conf = PTF.find(t => t[0] === tf)!;
@@ -60,7 +62,7 @@ export function PortfolioPage() {
         <h1 style={{ font: "700 32px var(--font)", color: "var(--text-hi)", letterSpacing: "-.025em", marginBottom: 6 }}>Portfolio</h1>
         <p style={{ font: "500 15px var(--font)", color: "var(--text-3)", marginBottom: 28 }}>Track your performance, allocation, and profit & loss over time.</p>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 28, boxShadow: "var(--shadow-card)", marginBottom: 20 }}>
+        <div data-reveal="scale" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 28, boxShadow: "var(--shadow-card)", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
             <div>
               <div style={{ font: "500 13.5px var(--font)", color: "var(--text-3)" }}>Portfolio value</div>
@@ -81,7 +83,7 @@ export function PortfolioPage() {
           <div style={{ marginTop: 16 }}><AreaChart data={curve} h={220} showAxis /></div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+        <div data-reveal="1" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
           {stats.map(s => (
             <div key={s.label} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 20 }}>
               <div style={{ font: "500 13px var(--font)", color: "var(--text-3)" }}>{s.label}</div>
@@ -94,7 +96,7 @@ export function PortfolioPage() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0,1fr)", gap: 20, alignItems: "start" }}>
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 24, boxShadow: "var(--shadow-card)" }}>
+          <div data-reveal="slide-left" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 24, boxShadow: "var(--shadow-card)" }}>
             <div style={{ font: "700 16px var(--font)", color: "var(--text-hi)", marginBottom: 20 }}>Asset allocation</div>
             <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
               <Donut slices={slices} size={188} />
@@ -115,7 +117,7 @@ export function PortfolioPage() {
             </div>
           </div>
 
-          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
+          <div data-reveal="slide-right" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
             <div style={{ padding: "20px 24px", font: "700 16px var(--font)", color: "var(--text-hi)", borderBottom: "1px solid var(--border)" }}>Asset breakdown</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr>{["Asset", "Holdings", "Avg cost", "Price", "Value", "Profit / Loss"].map((h, i) => (

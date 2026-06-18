@@ -78,7 +78,7 @@ export function RegisterPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", animation: "fadeUpIn 0.65s ease 0.05s both" }}>
         <div style={{ padding: "26px 40px" }}>
           <Link href="/" style={{ textDecoration: "none", display: "inline-block" }}><Logo /></Link>
         </div>

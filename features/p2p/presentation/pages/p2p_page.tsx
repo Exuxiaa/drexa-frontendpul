@@ -6,6 +6,7 @@ import { AppShell } from "@/features/core/presentation/components/app_shell";
 import {
   Icon, Container, CoinBadge, COIN, fUSD, fNum, rng,
 } from "@/features/core/presentation/components/drexa_kit";
+import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
 const PAY_METHODS = ["Bank Transfer", "Wise", "Revolut", "PayPal", "SEPA", "Cash App", "Zelle"];
 const MERCHANTS = [
@@ -33,6 +34,7 @@ function buildOffers(side: string, asset: string): Offer[] {
 }
 
 export function P2PPage() {
+  useScrollReveal();
   const [side, setSide] = useState("buy");
   const [asset, setAsset] = useState("USDT");
   const [amount, setAmount] = useState("");
@@ -66,7 +68,7 @@ export function P2PPage() {
           </div>
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 18, boxShadow: "var(--shadow-card)", marginBottom: 20, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div data-reveal="1" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 18, boxShadow: "var(--shadow-card)", marginBottom: 20, display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: "var(--inset)", borderRadius: "var(--r-sm)", padding: 4 }}>
             {([["buy", "Buy"], ["sell", "Sell"]] as [string, string][]).map(([id, label]) => (
               <button key={id} onClick={() => setSide(id)} style={{ width: 92, height: 38, borderRadius: "var(--r-xs)", border: "none", cursor: "pointer", font: "700 14px var(--font)",
@@ -94,7 +96,7 @@ export function P2PPage() {
           </div>
         </div>
 
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
+        <div data-reveal="1" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>{["Advertiser", "Price", "Available / Limits", "Payment", ""].map((h, i) => (
               <th key={i} style={{ textAlign: i === 4 ? "right" : "left", padding: "15px 24px", font: "600 11px var(--font)", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</th>

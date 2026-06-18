@@ -9,6 +9,7 @@ import {
 } from "@/features/core/presentation/components/drexa_kit";
 import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
 import { useBinanceKlines, type Candle } from "@/features/core/presentation/hooks/use_binance_klines";
+import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
 function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -121,6 +122,15 @@ function OrderTicket({ coin }: { coin: Coin }) {
   const [limit, setLimit] = useState((coin.price * 1.02).toFixed(coin.price < 10 ? 4 : 2));
   const [amount, setAmount] = useState("");
   const [pct, setPct] = useState(0);
+  // Seed the ticket from the live price only when the pair changes — not on
+  // every price tick, otherwise live updates would clobber the user's input.
+  useEffect(() => {
+    setPrice(coin.price.toFixed(coin.price < 10 ? 4 : 2));
+    setStop((coin.price * 0.98).toFixed(coin.price < 10 ? 4 : 2));
+    setLimit((coin.price * 1.02).toFixed(coin.price < 10 ? 4 : 2));
+    setAmount(""); setPct(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coin.sym]);
 
   const isBuy = side === "buy";
   const balQuote = 12480.00, balBase = 0.1312;
@@ -260,6 +270,7 @@ function OrdersPanel() {
 
 const TFS = ["15m", "1H", "4H", "1D", "1W"];
 export function TradePage({ sym: symProp }: { sym?: string }) {
+  useScrollReveal();
   const initial = symProp && COIN(symProp) ? symProp : "BTC";
   const [sym, setSym] = useState(initial);
   const [tf, setTf] = useState("1H");
@@ -285,7 +296,7 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
   return (
     <AppShell>
       <Container max={1320} style={{ padding: "26px 32px 56px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: "16px 22px", marginBottom: 16, boxShadow: "var(--shadow-card)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: "16px 22px", marginBottom: 16, boxShadow: "var(--shadow-card)", animation: "fadeUpIn 0.5s ease both" }}>
           <div style={{ position: "relative" }}>
             <button onClick={() => setPairOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 12, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
               <CoinBadge sym={sym} size={40} />
@@ -319,7 +330,7 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 332px", gap: 16, alignItems: "start" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div data-reveal="slide-left" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 18, boxShadow: "var(--shadow-card)" }}>
               <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
                 {TFS.map(t => (
@@ -335,8 +346,8 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
             </div>
             <OrdersPanel />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <OrderTicket key={coin.sym} coin={coin} />
+          <div data-reveal="slide-right" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <OrderTicket coin={coin} />
             <OrderBook price={coin.price} />
           </div>
         </div>
