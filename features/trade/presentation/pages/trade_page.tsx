@@ -7,17 +7,22 @@ import {
   Icon, Container, CoinBadge, Delta,
   COINS, COIN, fUSD, fNum, fCompact, type Coin,
 } from "@/features/core/presentation/components/drexa_kit";
-import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
-import { useBinanceKlines, type Candle } from "@/features/core/presentation/hooks/use_binance_klines";
+import { useMarketStream, type OrderBook as OrderBookData } from "@/features/core/presentation/hooks/use_market_stream";
 import { usePlaceOrder } from "../hooks/usePlaceOrder";
-import { useOrderBook } from "../hooks/useOrderBook";
 import { useOrders, useTrades, useCancelOrder } from "../hooks/useOrders";
 import { useBalances } from "../hooks/useBalances";
 import type { OrderSide, OrderType, Order, TradeView } from "../../model/order";
 import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
 
+export interface Candle {
+  t: number; // open time (ms)
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
 // ── helpers for live order/trade rows ─────────────────────────────────────────
-const baseOf = (pairId: string) => pairId.split("_")[0] ?? pairId;
 const pairLabel = (pairId: string) => pairId.replace("_", "/");
 const titleCase = (s: string) =>
   s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -49,7 +54,6 @@ const SideTag = ({ s }: { s: OrderSide }) => (
 const PanelEmpty = ({ span, loading, text }: { span: number; loading: boolean; text: string }) => (
   <tr><td colSpan={span} style={{ padding: 40, textAlign: "center", font: "500 13px var(--font)", color: "var(--text-3)" }}>{loading ? "Loading…" : text}</td></tr>
 );
-
 function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(720);
@@ -60,7 +64,7 @@ function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
     ro.observe(wrapRef.current); return () => ro.disconnect();
   }, []);
   if (data.length === 0) {
-    return <div ref={wrapRef} style={{ width: "100%", height: h, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", font: "500 13px var(--font)" }}>Loading chart…</div>;
+    return <div ref={wrapRef} style={{ width: "100%", height: h, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", font: "500 13px var(--font)" }}>Chart history unavailable</div>;
   }
   const padR = 64, padT = 14, padB = 24, padL = 6;
   const innerW = Math.max(10, w - padL - padR), innerH = h - padT - padB;
@@ -105,27 +109,20 @@ function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   );
 }
 
-function OrderBook({ price, pairId }: { price: number; pairId: string }) {
-  // Live depth from the Go matching engine (polled REST snapshot). No synthetic
-  // fallback — an empty engine shows an empty book, never fabricated numbers.
-  const { book } = useOrderBook(pairId, 14);
-  const base = baseOf(pairId);
-
+function OrderBook({ price, ob, sym }: { price: number; ob?: OrderBookData; sym?: string }) {
   const rows = useMemo(() => {
-    const top = (levels: { price: number; quantity: number }[], dir: 1 | -1) =>
+    const mapLevels = (levels: { price: number; quantity: number }[]) =>
       levels
         .map(l => ({ p: l.price, amt: l.quantity, total: l.price * l.quantity }))
-        .sort((a, b) => (b.p - a.p) * dir)   // asks: lowest first (reversed below); bids: highest first
+        .sort((a, b) => b.p - a.p)
         .slice(0, 8);
-    // Asks: keep the 8 lowest, then render highest→lowest so the best ask sits
-    // just above the spread. Bids: highest→lowest.
-    const asks = top(book?.asks ?? [], 1).slice(0, 8).sort((a, b) => b.p - a.p);
-    const bids = top(book?.bids ?? [], -1).slice(0, 8);
+    const asks = mapLevels(ob?.asks ?? []).sort((a, b) => b.p - a.p);
+    const bids = mapLevels(ob?.bids ?? []);
     return { asks, bids };
-  }, [book]);
-
+  }, [ob]);
   const isEmpty = rows.asks.length === 0 && rows.bids.length === 0;
   const maxTot = Math.max(...[...rows.asks, ...rows.bids].map(r => r.total), 1e-9);
+  const base = sym ?? "Coin";
   const Row = ({ r, side }: { r: { p: number; amt: number; total: number }; side: "ask" | "bid" }) => (
     <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "4px 14px", font: "500 12px var(--mono)", fontVariantNumeric: "tabular-nums" }}>
       <span style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: (r.total / maxTot * 100) + "%", background: side === "ask" ? "var(--down-soft)" : "var(--up-soft)" }} />
@@ -406,18 +403,20 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
   const [pairOpen, setPairOpen] = useState(false);
   const base = COIN(sym)!;
 
-  // Live price/stats from the gateway market stream; fall back to seed data until first tick.
-  const { tickers, isConnected } = useMarketStream();
+  // Live price/stats/orderbook from the gateway market stream.
+  const { tickers, orderbooks, isConnected } = useMarketStream();
   const t = tickers[sym];
+  const ob = orderbooks[sym];
   const coin: Coin = {
     ...base,
-    price: t?.price ?? base.price,
+    price: t?.price && t.price > 0 ? t.price : base.price,
     ch: t?.ch ?? base.ch,
     vol: t?.vol ?? base.vol,
   };
 
-  // Realtime candlesticks straight from Binance (historical + live last candle).
-  const { candles: data, loading: chartLoading } = useBinanceKlines(sym, tf, 120);
+  // Backend doesn't support klines yet. Use an empty array to show "Chart history unavailable"
+  const data: Candle[] = [];
+  const chartLoading = false;
 
   const hi = t?.high ?? coin.price * 1.045;
   const lo = t?.low ?? coin.price * 0.962;
@@ -477,7 +476,7 @@ export function TradePage({ sym: symProp }: { sym?: string }) {
           </div>
           <div data-reveal="slide-right" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <OrderTicket coin={coin} />
-            <OrderBook price={coin.price} pairId={`${sym}_USDC`} />
+            <OrderBook price={coin.price} ob={ob} sym={sym} />
           </div>
         </div>
       </Container>

@@ -9,19 +9,32 @@ export interface TickerData {
   low: number;
 }
 
+export interface OrderBookLevel {
+  price: number;
+  quantity: number;
+}
+
+export interface OrderBook {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+}
+
 // Module-level state for singleton WebSocket
 let sharedWs: WebSocket | null = null;
 let reconnectTimeout: NodeJS.Timeout | null = null;
 let reconnectAttempts = 0;
 let sharedTickers: Record<string, TickerData> = {};
+let sharedOrderbooks: Record<string, OrderBook> = {};
 let sharedIsConnected = false;
 
 // Subscriptions
-const subscribers = new Set<(tickers: Record<string, TickerData>) => void>();
+const tickerSubscribers = new Set<(tickers: Record<string, TickerData>) => void>();
+const orderbookSubscribers = new Set<(obs: Record<string, OrderBook>) => void>();
 const statusSubscribers = new Set<(connected: boolean) => void>();
 
 function notifySubscribers() {
-  subscribers.forEach((sub) => sub(sharedTickers));
+  tickerSubscribers.forEach((sub) => sub(sharedTickers));
+  orderbookSubscribers.forEach((sub) => sub(sharedOrderbooks));
 }
 
 function notifyStatusSubscribers() {
@@ -33,9 +46,9 @@ function connectWebSocket() {
     return;
   }
 
-  // Bypass Next.js API rewrites for WebSockets as it often drops upgrades in dev.
-  // Set NEXT_PUBLIC_WS_URL to the ngrok wss:// tunnel when running behind ngrok.
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/api/v1/market/ws';
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const wsUrl = baseUrl.replace(/^http/, 'ws') + 'market/ws';
+  
   sharedWs = new WebSocket(wsUrl);
 
   sharedWs.onopen = () => {
@@ -48,33 +61,39 @@ function connectWebSocket() {
   sharedWs.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (Array.isArray(data)) {
-        let updated = false;
-        const nextTickers = { ...sharedTickers };
+      if (data.type === 'orderbook' && data.pair) {
+        const sym = data.pair.replace('_USD', '').replace('_USDT', '').replace('_USDC', '');
+        
+        sharedOrderbooks = {
+          ...sharedOrderbooks,
+          [sym]: { bids: data.bids || [], asks: data.asks || [] }
+        };
 
-        for (const ticker of data) {
-          if (ticker.e === '24hrMiniTicker') {
-            const sym = ticker.s.replace('USDT', '');
-            const c = parseFloat(ticker.c);
-            const o = parseFloat(ticker.o);
-            const h = parseFloat(ticker.h);
-            const l = parseFloat(ticker.l);
-            const vol = parseFloat(ticker.q);
+        // Derive price from the top of the book
+        let price = sharedTickers[sym]?.price || 0;
+        if (data.bids && data.bids.length > 0) {
+          price = data.bids[0].price;
+        } else if (data.asks && data.asks.length > 0) {
+          price = data.asks[0].price;
+        }
 
-            const ch = o > 0 ? ((c - o) / o) * 100 : 0;
-
-            const current = nextTickers[sym];
-            if (!current || current.price !== c || current.ch !== ch || current.vol !== vol) {
-              nextTickers[sym] = { sym, price: c, ch, vol, high: h, low: l };
-              updated = true;
-            }
+        if (price > 0) {
+          const current = sharedTickers[sym];
+          if (!current || current.price !== price) {
+            sharedTickers = {
+              ...sharedTickers,
+              [sym]: {
+                sym,
+                price,
+                ch: current?.ch || 0,
+                vol: current?.vol || 0,
+                high: current?.high || price,
+                low: current?.low || price,
+              }
+            };
           }
         }
-
-        if (updated) {
-          sharedTickers = nextTickers;
-          notifySubscribers();
-        }
+        notifySubscribers();
       }
     } catch (error) {
       console.error('Failed to parse market data:', error);
@@ -94,8 +113,6 @@ function connectWebSocket() {
   };
 
   sharedWs.onerror = () => {
-    // Hide the unhelpful WebSocket error event to prevent Next.js dev overlay from showing
-    // We already log reconnect attempts in onclose anyway.
     if (sharedWs) sharedWs.close();
   };
 }
@@ -106,7 +123,6 @@ function disconnectWebSocket() {
     reconnectTimeout = null;
   }
   if (sharedWs) {
-    // Remove listeners so intentional close doesn't trigger error or reconnect
     sharedWs.onopen = null;
     sharedWs.onmessage = null;
     sharedWs.onclose = null;
@@ -116,42 +132,49 @@ function disconnectWebSocket() {
   }
   sharedIsConnected = false;
   reconnectAttempts = 0;
-  // Intentionally preserving sharedTickers so navigation between pages is instant
 }
 
 export function useMarketStream() {
   const [tickers, setTickers] = useState<Record<string, TickerData>>(sharedTickers);
+  const [orderbooks, setOrderbooks] = useState<Record<string, OrderBook>>(sharedOrderbooks);
   const [isConnected, setIsConnected] = useState(sharedIsConnected);
 
   useEffect(() => {
     // Add subscriptions
-    subscribers.add(setTickers);
+    tickerSubscribers.add(setTickers);
+    orderbookSubscribers.add(setOrderbooks);
     statusSubscribers.add(setIsConnected);
 
     // Initial state
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTickers(sharedTickers);
+    setOrderbooks(sharedOrderbooks);
     setIsConnected(sharedIsConnected);
 
+    let initTimeout: NodeJS.Timeout | null = null;
+
     // Only connect if this is the first subscriber
-    if (subscribers.size === 1) {
-      connectWebSocket();
+    if (tickerSubscribers.size === 1) {
+      initTimeout = setTimeout(() => {
+        connectWebSocket();
+      }, 50);
     }
 
     return () => {
-      subscribers.delete(setTickers);
+      if (initTimeout) clearTimeout(initTimeout);
+      tickerSubscribers.delete(setTickers);
+      orderbookSubscribers.delete(setOrderbooks);
       statusSubscribers.delete(setIsConnected);
       
       // If no more subscribers, disconnect to save resources
-      if (subscribers.size === 0) {
+      if (tickerSubscribers.size === 0) {
         disconnectWebSocket();
       }
     };
   }, []);
 
-  const getTicker = useCallback((sym: string) => {
-    return tickers[sym];
-  }, [tickers]);
+  const getTicker = useCallback((sym: string) => tickers[sym], [tickers]);
+  const getOrderbook = useCallback((sym: string) => orderbooks[sym], [orderbooks]);
 
-  return { tickers, isConnected, getTicker };
+  return { tickers, orderbooks, isConnected, getTicker, getOrderbook };
 }
