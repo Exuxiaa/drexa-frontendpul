@@ -62,7 +62,11 @@ function connectWebSocket() {
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'orderbook' && data.pair) {
-        const sym = data.pair.replace('_USD', '').replace('_USDT', '').replace('_USDC', '');
+        // Base coin = part before the first underscore. Do NOT use
+        // .replace('_USD', '') — for "BTC_USDT" that strips the inner "_USD"
+        // and yields "BTCT", so the book/ticker land under the wrong key and the
+        // page (which looks up by "BTC") shows nothing.
+        const sym = data.pair.split('_')[0];
         
         sharedOrderbooks = {
           ...sharedOrderbooks,
@@ -95,7 +99,11 @@ function connectWebSocket() {
         }
         notifySubscribers();
       } else if (data.type === 'ticker' && data.pair) {
-        const sym = data.pair.replace('_USD', '').replace('_USDT', '').replace('_USDC', '');
+        // Base coin = part before the first underscore. Do NOT use
+        // .replace('_USD', '') — for "BTC_USDT" that strips the inner "_USD"
+        // and yields "BTCT", so the book/ticker land under the wrong key and the
+        // page (which looks up by "BTC") shows nothing.
+        const sym = data.pair.split('_')[0];
         const current = sharedTickers[sym];
         sharedTickers = {
           ...sharedTickers,

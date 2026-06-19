@@ -39,21 +39,21 @@ export interface PlaceOrderRequest {
 }
 
 export interface PlaceOrderResponse {
-  OrderID?: string;
-  UserID?: string;
-  PairID?: string;
-  Side?: OrderSide;
-  Type?: OrderType;
-  Status?: OrderStatus;
-  Price?: number;
-  Quantity?: number;
-  FilledQuantity?: number;
-  LockedAmount?: number;
-  Fee?: number;
-  CreatedAt?: string;
-  UpdatedAt?: string;
-  Message?: string;
-  Error?: string;
+  order_id?: string;
+  user_id?: string;
+  pair_id?: string;
+  side?: OrderSide;
+  type?: OrderType;
+  status?: OrderStatus;
+  price?: number;
+  quantity?: number;
+  filled_quantity?: number;
+  locked_amount?: number;
+  fee?: number;
+  created_at?: string;
+  updated_at?: string;
+  message?: string;
+  error?: string;
 }
 
 export const placeOrder = async (

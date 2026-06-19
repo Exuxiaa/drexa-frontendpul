@@ -124,8 +124,8 @@ function DepositModalContent({ closeModal }: { closeModal: () => void }) {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 0", marginBottom: 16, borderTop: "1px solid var(--border-soft)", borderBottom: "1px solid var(--border-soft)" }}>
-            <SummaryRow k="Processing fee" v="1.5%" />
-            <SummaryRow k="You receive" v={buyAmt ? fUSD((parseFloat(buyAmt) || 0) * 0.985) + " USD" : "\u2014"} />
+            <SummaryRow k="Rate" v="1 USD = 1 USDT" />
+            <SummaryRow k="You receive" v={buyAmt ? fNum(parseFloat(buyAmt) || 0, 2) + " USDT" : "\u2014"} />
           </div>
           {error && <div style={{ color: "var(--warn)", font: "500 13px var(--font)", marginBottom: 10 }}>{error}</div>}
           <button onClick={handleContinue} disabled={!buyAmt || loadingIntent} style={{ width: "100%", height: 48, borderRadius: "var(--r-md)", border: "none", cursor: (!buyAmt || loadingIntent) ? "default" : "pointer", background: (!buyAmt || loadingIntent) ? "var(--card-2)" : "var(--blue)", color: (!buyAmt || loadingIntent) ? "var(--text-3)" : "#fff", font: "700 14.5px var(--font)" }}>
@@ -172,9 +172,10 @@ function WithdrawModalContent({ rows, closeModal }: { rows: WalRow[], closeModal
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Strictly enforce USD for withdrawal
-  const usdRow = rows.find((r: WalRow) => r.sym === 'USD' || r.sym === 'USDC') || { qty: 0 };
-  const maxUsd = usdRow.qty;
+  // Balances are held in USDT (1 USDT = $1). Fiat withdrawal sells that USDT back
+  // to USD via PayPal, so the available amount comes from the USDT wallet.
+  const usdtRow = rows.find((r: WalRow) => r.sym === 'USDT') || { qty: 0 };
+  const maxUsd = usdtRow.qty;
 
   const handleWithdraw = async () => {
     if (!payoutAmt || isNaN(parseFloat(payoutAmt)) || !paypalEmail) return;
@@ -209,7 +210,7 @@ function WithdrawModalContent({ rows, closeModal }: { rows: WalRow[], closeModal
       <div style={{ marginBottom: 14 }}>
         <div style={{ font: "500 12px var(--font)", color: "var(--text-3)", marginBottom: 7, display: "flex", justifyContent: "space-between" }}>
           <span>Amount (USD)</span>
-          <span style={{ color: "var(--text-4)" }}>Balance: {fNum(maxUsd, 2)} USD</span>
+          <span style={{ color: "var(--text-4)" }}>Balance: {fNum(maxUsd, 2)} USDT</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, height: 48, padding: "0 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)" }}>
           <span style={{ font: "600 15px var(--mono)", color: "var(--text-3)" }}>$</span>
@@ -225,8 +226,9 @@ function WithdrawModalContent({ rows, closeModal }: { rows: WalRow[], closeModal
         <SummaryRow k="Processing fee" v="Free" />
         <SummaryRow k="You receive" v={payoutAmt ? `$${fNum(parseFloat(payoutAmt) || 0, 2)}` : "—"} />
       </div>
+      {parseFloat(payoutAmt) > maxUsd && <div style={{ color: "var(--warn)", font: "500 13px var(--font)", marginBottom: 10 }}>Amount exceeds your available USDT balance.</div>}
       {error && <div style={{ color: "var(--warn)", font: "500 13px var(--font)", marginBottom: 10 }}>{error}</div>}
-      <button onClick={handleWithdraw} disabled={!payoutAmt || !paypalEmail || loading} style={{ width: "100%", height: 48, borderRadius: "var(--r-md)", border: "none", cursor: (!payoutAmt || !paypalEmail || loading) ? "default" : "pointer", background: (!payoutAmt || !paypalEmail || loading) ? "var(--card-2)" : "var(--blue)", color: (!payoutAmt || !paypalEmail || loading) ? "var(--text-3)" : "#fff", font: "700 14.5px var(--font)" }}>
+      <button onClick={handleWithdraw} disabled={!payoutAmt || !paypalEmail || loading || parseFloat(payoutAmt) > maxUsd} style={{ width: "100%", height: 48, borderRadius: "var(--r-md)", border: "none", cursor: (!payoutAmt || !paypalEmail || loading || parseFloat(payoutAmt) > maxUsd) ? "default" : "pointer", background: (!payoutAmt || !paypalEmail || loading || parseFloat(payoutAmt) > maxUsd) ? "var(--card-2)" : "var(--blue)", color: (!payoutAmt || !paypalEmail || loading || parseFloat(payoutAmt) > maxUsd) ? "var(--text-3)" : "#fff", font: "700 14.5px var(--font)" }}>
         {loading ? "Processing..." : "Withdraw via PayPal"}
       </button>
     </>
@@ -246,7 +248,15 @@ function TransferModalContent({ rows, coinRow, asset, assetOpen, setAssetOpen, s
     setLoading(true);
     setError("");
     try {
-      const multiplier = (asset === "USD" || asset === "IDR") ? 100 : 100000000;
+      // Scale to the currency's smallest unit — must match parseBalance() in
+      // useWalletData.ts. The old code scaled everything non-fiat by 1e8, which
+      // made USDT transfers 100x too large (USDT is micro, 1e6).
+      const sym = asset.toUpperCase();
+      let multiplier = 100; // USD / IDR / USDC — cents
+      if (sym === "BTC") multiplier = 100_000_000;
+      else if (sym === "ETH" || sym === "BNB") multiplier = 1_000_000_000_000_000_000;
+      else if (sym === "SOL") multiplier = 1_000_000_000;
+      else if (sym === "USDT") multiplier = 1_000_000;
       await api.post("/wallet/transfer", {
         to_address: toAddress,
         amount: Math.round(parseFloat(txAmt) * multiplier),

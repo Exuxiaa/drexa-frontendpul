@@ -178,7 +178,8 @@ function OrderTicket({ coin }: { coin: Coin }) {
   }, [coin.price, userEdited]);
 
   const isBuy = side === "buy";
-  const quoteBalObj = balances.find(b => b.currency === 'USDT' || b.currency === 'USD' || b.currency === 'USDC');
+  // The quote currency is always USDT — that's the only balance you can trade with.
+  const quoteBalObj = balances.find(b => b.currency === 'USDT');
   const baseBalObj = balances.find(b => b.currency === coin.sym);
   const balQuote = quoteBalObj?.available ?? 0;
   const balBase = baseBalObj?.available ?? 0;
@@ -242,8 +243,8 @@ function OrderTicket({ coin }: { coin: Coin }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {type === "Market"
-          ? <TicketField label="Price" value="Market price" readOnly suffix="USD" />
-          : <TicketField label="Price" value={price} onChange={(v) => { setPrice(v); setUserEdited(true); }} suffix="USD" />}
+          ? <TicketField label="Price" value="Market price" readOnly suffix="USDT" />
+          : <TicketField label="Price" value={price} onChange={(v) => { setPrice(v); setUserEdited(true); }} suffix="USDT" />}
         <TicketField label="Amount" value={amount} onChange={(v) => { setAmount(v); setPct(0); setUserEdited(true); }} suffix={coin.sym} />
         <div style={{ display: "flex", gap: 8 }}>
           {[25, 50, 75, 100].map(p => (
@@ -254,9 +255,9 @@ function OrderTicket({ coin }: { coin: Coin }) {
             }}>{p}%</button>
           ))}
         </div>
-        <TicketField label="Total" value={amt ? fNum(total) : ""} readOnly suffix="USD" />
+        <TicketField label="Total" value={amt ? fNum(total) : ""} readOnly suffix="USDT" />
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 0", borderTop: "1px solid var(--border-soft)" }}>
-          {([["Available", isBuy ? fUSD(balQuote) + " USD" : fNum(balBase, 4) + " " + coin.sym],
+          {([["Available", isBuy ? fNum(balQuote, 2) + " USDT" : fNum(balBase, 4) + " " + coin.sym],
             ["Est. fee (0.10%)", fUSD(fee)],
             [isBuy ? "You receive" : "You get", isBuy ? fNum(amt, 6) + " " + coin.sym : fUSD(total - fee)]] as [string, string][]).map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", font: "500 13px var(--font)" }}>
@@ -272,7 +273,7 @@ function OrderTicket({ coin }: { coin: Coin }) {
         )}
         {placeOrderMutation.isSuccess && (
           <div style={{ font: "500 12.5px var(--font)", color: "var(--up)", textAlign: "center" }}>
-            Order placed{placeOrderMutation.data?.Status ? ` · ${placeOrderMutation.data.Status}` : ""}
+            Order placed{placeOrderMutation.data?.status ? ` · ${placeOrderMutation.data.status}` : ""}
           </div>
         )}
         <button onClick={handleSubmit} disabled={!canSubmit} style={{ height: 50, borderRadius: "var(--r-md)", border: "none", cursor: canSubmit ? "pointer" : "not-allowed", background: accent, color: "#fff", font: "700 15px var(--font)", opacity: canSubmit ? 1 : 0.5 }}>

@@ -67,5 +67,14 @@ export function useOrders(pairId?: string) {
     return () => window.clearTimeout(t);
   }, [refresh]);
 
+  // Re-fetch when an order is placed elsewhere (the order ticket fires
+  // "orders-refresh" after a successful POST /orders) so a new order appears
+  // here immediately. A small delay lets the trade settle server-side first.
+  useEffect(() => {
+    const onRefresh = () => window.setTimeout(refresh, 250);
+    window.addEventListener("orders-refresh", onRefresh);
+    return () => window.removeEventListener("orders-refresh", onRefresh);
+  }, [refresh]);
+
   return { openOrders, historyOrders, trades, loading, refresh, cancelOrder, cancelling };
 }

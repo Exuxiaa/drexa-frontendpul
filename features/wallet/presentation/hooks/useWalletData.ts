@@ -111,7 +111,8 @@ export function useWalletData(transactionLimit = 20) {
   }, [fetchBalance, fetchTransactions]);
 
   return useMemo(() => {
-    const usdBal = balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+    // Cash is held as USDT (1 USDT = $1); USD only exists at the deposit/withdraw edges.
+    const usdBal = balances.find(b => b.currency === 'USDT');
     return {
       balances,
       walletUsd: usdBal ? usdBal.qty : null,
