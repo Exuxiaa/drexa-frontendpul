@@ -7,9 +7,30 @@ import {
   TIcon, CoinBadge, Panel, Pill,
   btnBrand, btnGhost, thL, thR, tdL, tdR,
 } from '@/features/core/presentation/components/primitives';
-import { COINS, OPEN_ORDERS, ORDER_HISTORY, FILLS } from '@/features/core/domain/data/mock_data';
+import { COINS } from '@/features/core/domain/data/mock_data';
 import { fmtUSD, fmtNum } from '@/features/core/domain/data/trading_utils';
-import type { OpenOrder, HistoryOrder, Fill } from '@/features/core/domain/model';
+import { useOrders, useTrades, useCancelOrder } from '@/features/trade/presentation/hooks/useOrders';
+import type { Order, OrderSide, TradeView } from '@/features/trade/model/order';
+
+const STATUS_LABEL: Record<string, string> = {
+  open: 'Open', partially_filled: 'Partial', filled: 'Filled',
+  cancelled: 'Cancelled', pending: 'Pending', untriggered: 'Untriggered',
+};
+const baseOf = (pairId: string) => pairId.split('_')[0] ?? pairId;
+const quoteOf = (pairId: string) => pairId.split('_')[1] ?? 'USDC';
+const titleCase = (s: string) => s.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+const fillPct = (o: Order) => (o.quantity > 0 ? Math.min(100, Math.round((o.filled_quantity / o.quantity) * 100)) : 0);
+const shortId = (id: string) => id.slice(0, 8);
+
+function fmtTime(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay
+    ? `Today ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 function StatusBadge({ status }: { status: string }) {
   const tone = status === 'Filled' ? 'up' : (status === 'Cancelled' || status === 'Expired') ? 'neutral' : 'warn';
@@ -29,7 +50,7 @@ function FilterBar({ pair, setPair, side, setSide, extra }: {
         <span style={{ font: 'var(--micro)', color: 'var(--fg-4)' }}>Pair</span>
         <select value={pair} onChange={e => setPair(e.target.value)} style={selStyle}>
           <option value="all">All</option>
-          {COINS.map(c => <option key={c.sym} value={c.sym}>{c.sym}/USDT</option>)}
+          {COINS.map(c => <option key={c.sym} value={c.sym}>{c.sym}</option>)}
         </select>
       </div>
       <div style={{ display: 'flex', gap: 2, padding: 3, background: 'var(--surface-input)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border-subtle)' }}>
@@ -41,9 +62,6 @@ function FilterBar({ pair, setPair, side, setSide, extra }: {
           }}>{l}</button>
         ))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 38, padding: '0 13px', background: 'var(--surface-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-sm)', color: 'var(--fg-3)', cursor: 'pointer' }}>
-        <TIcon name="calendar" size={15} /><span style={{ font: 'var(--micro)' }}>Last 30 days</span>
-      </div>
       <div style={{ flex: 1 }} />
       {extra}
     </div>
@@ -54,7 +72,16 @@ function EmptyRow({ span, text }: { span: number; text: string }) {
   return <tr><td colSpan={span} style={{ padding: 44, textAlign: 'center', font: 'var(--small)', color: 'var(--fg-3)' }}>{text}</td></tr>;
 }
 
-function OpenTable({ rows }: { rows: OpenOrder[] }) {
+function PairCell({ pairId }: { pairId: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <CoinBadge sym={baseOf(pairId)} size={26} />
+      <span style={{ fontWeight: 700, color: 'var(--fg)', font: 'var(--small)' }}>{baseOf(pairId)}/{quoteOf(pairId)}</span>
+    </div>
+  );
+}
+
+function OpenTable({ rows, onCancel, canceling }: { rows: Order[]; onCancel: (id: string) => void; canceling: boolean }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead><tr>
@@ -63,28 +90,26 @@ function OpenTable({ rows }: { rows: OpenOrder[] }) {
         <th style={thR}>Time</th><th style={{ ...thR, width: 100 }}></th>
       </tr></thead>
       <tbody>
-        {rows.map((o, i) => (
-          <tr key={i} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
-            <td style={{ ...tdL, color: 'var(--fg-3)', font: '500 12px var(--font-num)' }}>{o.id}</td>
-            <td style={tdL}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <CoinBadge sym={o.sym} size={26} />
-                <span style={{ fontWeight: 700, color: 'var(--fg)', font: 'var(--small)' }}>{o.sym}/USDT</span>
-              </div>
-            </td>
-            <td style={{ ...tdL, color: o.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{o.side} · {o.type}</td>
-            <td style={{ ...tdR, color: 'var(--fg)' }}>{fmtNum(o.price, o.price < 1 ? 4 : 2)}</td>
-            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{o.amt} {o.sym}</td>
+        {rows.map((o) => (
+          <tr key={o.order_id} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
+            <td style={{ ...tdL, color: 'var(--fg-3)', font: '500 12px var(--font-num)' }}>{shortId(o.order_id)}</td>
+            <td style={tdL}><PairCell pairId={o.pair_id} /></td>
+            <td style={{ ...tdL, color: o.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{o.side} · {titleCase(o.type)}</td>
+            <td style={{ ...tdR, color: 'var(--fg)' }}>{o.price != null ? fmtNum(o.price, o.price < 1 ? 4 : 2) : 'Market'}</td>
+            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtNum(o.quantity, 4)} {baseOf(o.pair_id)}</td>
             <td style={tdR}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                 <div style={{ width: 50, height: 5, borderRadius: 3, background: 'var(--surface-input)', overflow: 'hidden' }}>
-                  <div style={{ width: o.filled + '%', height: '100%', background: 'var(--brand-mint)' }} />
+                  <div style={{ width: fillPct(o) + '%', height: '100%', background: 'var(--brand-mint)' }} />
                 </div>
-                <span style={{ color: 'var(--fg-3)', width: 34 }}>{o.filled}%</span>
+                <span style={{ color: 'var(--fg-3)', width: 34 }}>{fillPct(o)}%</span>
               </div>
             </td>
-            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{o.time.replace('Today · ', '')}</td>
-            <td style={tdR}><button style={{ border: '1px solid var(--border-subtle)', background: 'none', color: 'var(--fg-2)', borderRadius: 'var(--r-xs)', padding: '5px 13px', cursor: 'pointer', font: 'var(--nano)' }}>Cancel</button></td>
+            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{fmtTime(o.created_at)}</td>
+            <td style={tdR}>
+              <button onClick={() => onCancel(o.order_id)} disabled={canceling}
+                style={{ border: '1px solid var(--border-subtle)', background: 'none', color: 'var(--fg-2)', borderRadius: 'var(--r-xs)', padding: '5px 13px', cursor: canceling ? 'not-allowed' : 'pointer', font: 'var(--nano)', opacity: canceling ? 0.5 : 1 }}>Cancel</button>
+            </td>
           </tr>
         ))}
         {rows.length === 0 && <EmptyRow span={8} text="No open orders match your filters." />}
@@ -93,7 +118,7 @@ function OpenTable({ rows }: { rows: OpenOrder[] }) {
   );
 }
 
-function HistoryTable({ rows }: { rows: HistoryOrder[] }) {
+function HistoryTable({ rows }: { rows: Order[] }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead><tr>
@@ -102,21 +127,16 @@ function HistoryTable({ rows }: { rows: HistoryOrder[] }) {
         <th style={thR}>Status</th><th style={thR}>Time</th>
       </tr></thead>
       <tbody>
-        {rows.map((o, i) => (
-          <tr key={i} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
-            <td style={{ ...tdL, color: 'var(--fg-3)', font: '500 12px var(--font-num)' }}>{o.id}</td>
-            <td style={tdL}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <CoinBadge sym={o.sym} size={26} />
-                <span style={{ fontWeight: 700, color: 'var(--fg)', font: 'var(--small)' }}>{o.sym}/USDT</span>
-              </div>
-            </td>
-            <td style={{ ...tdL, color: o.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{o.side} · {o.type}</td>
-            <td style={{ ...tdR, color: 'var(--fg)' }}>{fmtNum(o.price, o.price < 1 ? 4 : 2)}</td>
-            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{o.amt} {o.sym}</td>
-            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtUSD(o.price * o.amt)}</td>
-            <td style={tdR}><StatusBadge status={o.status} /></td>
-            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{o.time.replace('Today · ', 'Today ')}</td>
+        {rows.map((o) => (
+          <tr key={o.order_id} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
+            <td style={{ ...tdL, color: 'var(--fg-3)', font: '500 12px var(--font-num)' }}>{shortId(o.order_id)}</td>
+            <td style={tdL}><PairCell pairId={o.pair_id} /></td>
+            <td style={{ ...tdL, color: o.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{o.side} · {titleCase(o.type)}</td>
+            <td style={{ ...tdR, color: 'var(--fg)' }}>{o.price != null ? fmtNum(o.price, o.price < 1 ? 4 : 2) : 'Market'}</td>
+            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtNum(o.quantity, 4)} {baseOf(o.pair_id)}</td>
+            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{o.price != null ? fmtUSD(o.price * o.quantity) : '—'}</td>
+            <td style={tdR}><StatusBadge status={STATUS_LABEL[o.status] ?? o.status} /></td>
+            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{fmtTime(o.updated_at || o.created_at)}</td>
           </tr>
         ))}
         {rows.length === 0 && <EmptyRow span={8} text="No orders in this period." />}
@@ -125,7 +145,7 @@ function HistoryTable({ rows }: { rows: HistoryOrder[] }) {
   );
 }
 
-function TradesTable({ rows }: { rows: Fill[] }) {
+function TradesTable({ rows }: { rows: TradeView[] }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead><tr>
@@ -135,21 +155,16 @@ function TradesTable({ rows }: { rows: Fill[] }) {
         <th style={thR}>Role</th><th style={thR}>Time</th>
       </tr></thead>
       <tbody>
-        {rows.map((o, i) => (
-          <tr key={i} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
-            <td style={tdL}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <CoinBadge sym={o.sym} size={26} />
-                <span style={{ fontWeight: 700, color: 'var(--fg)', font: 'var(--small)' }}>{o.sym}/USDT</span>
-              </div>
-            </td>
-            <td style={{ ...tdL, color: o.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{o.side}</td>
-            <td style={{ ...tdR, color: 'var(--fg)' }}>{fmtNum(o.price, o.price < 1 ? 4 : 2)}</td>
-            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{o.amt} {o.sym}</td>
-            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtUSD(o.price * o.amt)}</td>
-            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{fmtUSD(o.fee)}</td>
-            <td style={tdR}><Pill tone={o.role === 'Maker' ? 'info' : 'neutral'}>{o.role}</Pill></td>
-            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{o.time.replace('Today · ', 'Today ')}</td>
+        {rows.map((t) => (
+          <tr key={t.trade_id} style={{ borderTop: '1px solid var(--border-hairline)', font: '500 13px var(--font-num)', fontVariantNumeric: 'tabular-nums' }}>
+            <td style={tdL}><PairCell pairId={t.pair_id} /></td>
+            <td style={{ ...tdL, color: t.side === 'buy' ? 'var(--up)' : 'var(--down)', textTransform: 'capitalize', fontWeight: 700 }}>{t.side}</td>
+            <td style={{ ...tdR, color: 'var(--fg)' }}>{fmtNum(t.price, t.price < 1 ? 4 : 2)}</td>
+            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtNum(t.quantity, 4)} {baseOf(t.pair_id)}</td>
+            <td style={{ ...tdR, color: 'var(--fg-2)' }}>{fmtUSD(t.price * t.quantity)}</td>
+            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{fmtUSD(t.fee)}</td>
+            <td style={tdR}><Pill tone={t.role === 'maker' ? 'info' : 'neutral'}>{titleCase(t.role)}</Pill></td>
+            <td style={{ ...tdR, color: 'var(--fg-3)' }}>{fmtTime(t.executed_at)}</td>
           </tr>
         ))}
         {rows.length === 0 && <EmptyRow span={8} text="No fills in this period." />}
@@ -165,15 +180,27 @@ export function OrdersPage() {
   const [pair, setPair] = useState('all');
   const [side, setSide] = useState('all');
 
+  const openQ = useOrders('open');
+  const historyQ = useOrders('closed');
+  const tradesQ = useTrades();
+  const cancelMut = useCancelOrder();
+
+  const matchesOrder = (o: Order) =>
+    (pair === 'all' || baseOf(o.pair_id) === pair) && (side === 'all' || o.side === (side as OrderSide));
+  const matchesTrade = (t: TradeView) =>
+    (pair === 'all' || baseOf(t.pair_id) === pair) && (side === 'all' || t.side === (side as OrderSide));
+
+  const openRows = (openQ.data ?? []).filter(matchesOrder);
+  const historyRows = (historyQ.data ?? []).filter(matchesOrder);
+  const tradeRows = (tradesQ.data ?? []).filter(matchesTrade);
+
   const tabs: [string, string, number][] = [
-    ['open',    'Open orders',    OPEN_ORDERS.length],
-    ['history', 'Order history',  ORDER_HISTORY.length],
-    ['trades',  'Trade history',  FILLS.length],
+    ['open', 'Open orders', openRows.length],
+    ['history', 'Order history', historyRows.length],
+    ['trades', 'Trade history', tradeRows.length],
   ];
 
-  function flt<T extends { sym: string; side: string }>(arr: T[]): T[] {
-    return arr.filter(o => (pair === 'all' || o.sym === pair) && (side === 'all' || o.side === side));
-  }
+  const cancelAll = () => openRows.forEach(o => cancelMut.mutate(o.order_id));
 
   return (
     <TradingLayout>
@@ -206,17 +233,17 @@ export function OrdersPage() {
 
         <div style={{ marginBottom: 16 }}>
           <FilterBar pair={pair} setPair={setPair} side={side} setSide={setSide}
-            extra={tab === 'open' && (
-              <button style={{ ...btnGhost, height: 38, color: 'var(--down)', borderColor: 'rgba(255,77,77,.3)' }}>
+            extra={tab === 'open' && openRows.length > 0 && (
+              <button onClick={cancelAll} disabled={cancelMut.isPending} style={{ ...btnGhost, height: 38, color: 'var(--down)', borderColor: 'rgba(255,77,77,.3)', opacity: cancelMut.isPending ? 0.5 : 1 }}>
                 <TIcon name="x" size={14} color="var(--down)" />Cancel all
               </button>
             )} />
         </div>
 
         <Panel pad={0} style={{ overflow: 'hidden' }}>
-          {tab === 'open'    && <OpenTable    rows={flt(OPEN_ORDERS)} />}
-          {tab === 'history' && <HistoryTable rows={flt(ORDER_HISTORY)} />}
-          {tab === 'trades'  && <TradesTable  rows={flt(FILLS)} />}
+          {tab === 'open'    && <OpenTable    rows={openRows} onCancel={(id) => cancelMut.mutate(id)} canceling={cancelMut.isPending} />}
+          {tab === 'history' && <HistoryTable rows={historyRows} />}
+          {tab === 'trades'  && <TradesTable  rows={tradeRows} />}
         </Panel>
       </div>
     </TradingLayout>

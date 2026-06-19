@@ -5,14 +5,50 @@ import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/features/core/presentation/components/app_shell";
 import {
   Icon, Container, CoinBadge, Delta,
-  COINS, COIN, fUSD, fNum, fCompact, rng, type Coin,
+  COINS, COIN, fUSD, fNum, fCompact, type Coin,
 } from "@/features/core/presentation/components/drexa_kit";
 import { useMarketStream } from "@/features/core/presentation/hooks/use_market_stream";
 import { useBinanceKlines, type Candle } from "@/features/core/presentation/hooks/use_binance_klines";
 import { usePlaceOrder } from "../hooks/usePlaceOrder";
 import { useOrderBook } from "../hooks/useOrderBook";
-import type { OrderSide, OrderType } from "../../model/order";
+import { useOrders, useTrades, useCancelOrder } from "../hooks/useOrders";
+import { useBalances } from "../hooks/useBalances";
+import type { OrderSide, OrderType, Order, TradeView } from "../../model/order";
 import { useScrollReveal } from "@/features/core/presentation/hooks/use_scroll_reveal";
+
+// ── helpers for live order/trade rows ─────────────────────────────────────────
+const baseOf = (pairId: string) => pairId.split("_")[0] ?? pairId;
+const pairLabel = (pairId: string) => pairId.replace("_", "/");
+const titleCase = (s: string) =>
+  s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+function fmtTime(iso?: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  open: "Open",
+  partially_filled: "Partial",
+  filled: "Filled",
+  cancelled: "Cancelled",
+  pending: "Pending",
+  untriggered: "Untriggered",
+};
+
+// Hoisted out of OrdersPanel so they aren't recreated every render.
+const SideTag = ({ s }: { s: OrderSide }) => (
+  <span style={{ font: "600 12.5px var(--font)", color: s === "buy" ? "var(--up)" : "var(--down)", textTransform: "capitalize" }}>{s}</span>
+);
+const PanelEmpty = ({ span, loading, text }: { span: number; loading: boolean; text: string }) => (
+  <tr><td colSpan={span} style={{ padding: 40, textAlign: "center", font: "500 13px var(--font)", color: "var(--text-3)" }}>{loading ? "Loading…" : text}</td></tr>
+);
 
 function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -70,56 +106,59 @@ function CandleChart({ data, h = 360 }: { data: Candle[]; h?: number }) {
 }
 
 function OrderBook({ price, pairId }: { price: number; pairId: string }) {
-  // Live depth from the Go matching engine (polled REST snapshot).
-  const { book } = useOrderBook(pairId, 12);
+  // Live depth from the Go matching engine (polled REST snapshot). No synthetic
+  // fallback — an empty engine shows an empty book, never fabricated numbers.
+  const { book } = useOrderBook(pairId, 14);
+  const base = baseOf(pairId);
 
   const rows = useMemo(() => {
-    const hasLive = !!book && (book.bids.length > 0 || book.asks.length > 0);
-    if (hasLive) {
-      const top = (levels: { price: number; quantity: number }[]) =>
-        levels
-          .map(l => ({ p: l.price, amt: l.quantity, total: l.price * l.quantity }))
-          .sort((a, b) => b.p - a.p)
-          .slice(0, 7);
-      // asks descending (lowest sits nearest the spread), bids descending too.
-      return { asks: top(book!.asks), bids: top(book!.bids), live: true };
-    }
+    const top = (levels: { price: number; quantity: number }[], dir: 1 | -1) =>
+      levels
+        .map(l => ({ p: l.price, amt: l.quantity, total: l.price * l.quantity }))
+        .sort((a, b) => (b.p - a.p) * dir)   // asks: lowest first (reversed below); bids: highest first
+        .slice(0, 8);
+    // Asks: keep the 8 lowest, then render highest→lowest so the best ask sits
+    // just above the spread. Bids: highest→lowest.
+    const asks = top(book?.asks ?? [], 1).slice(0, 8).sort((a, b) => b.p - a.p);
+    const bids = top(book?.bids ?? [], -1).slice(0, 8);
+    return { asks, bids };
+  }, [book]);
 
-    // Fallback: synthetic depth so the panel still reads as a live book when the
-    // in-memory engine has no resting orders for this pair yet.
-    const r = rng(Math.round(price * 100) + 5);
-    const mk = (sign: number) => Array.from({ length: 7 }, (_, i) => {
-      const p = price * (1 + sign * (i + 1) * 0.0007 * (1 + r() * 0.5));
-      const amt = +(r() * 2.4 + 0.05).toFixed(4);
-      return { p, amt, total: p * amt };
-    });
-    return { asks: mk(1).sort((a, b) => b.p - a.p), bids: mk(-1).sort((a, b) => b.p - a.p), live: false };
-  }, [book, price]);
+  const isEmpty = rows.asks.length === 0 && rows.bids.length === 0;
   const maxTot = Math.max(...[...rows.asks, ...rows.bids].map(r => r.total), 1e-9);
   const Row = ({ r, side }: { r: { p: number; amt: number; total: number }; side: "ask" | "bid" }) => (
-    <div style={{ position: "relative", display: "flex", justifyContent: "space-between", padding: "4px 14px", font: "500 12px var(--mono)", fontVariantNumeric: "tabular-nums" }}>
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "4px 14px", font: "500 12px var(--mono)", fontVariantNumeric: "tabular-nums" }}>
       <span style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: (r.total / maxTot * 100) + "%", background: side === "ask" ? "var(--down-soft)" : "var(--up-soft)" }} />
       <span style={{ position: "relative", color: side === "ask" ? "var(--down)" : "var(--up)" }}>{fNum(r.p, r.p < 10 ? 4 : 2)}</span>
-      <span style={{ position: "relative", color: "var(--text-2)" }}>{fNum(r.amt, 4)}</span>
+      <span style={{ position: "relative", color: "var(--text-2)", textAlign: "right" }}>{fNum(r.amt, 4)}</span>
+      <span style={{ position: "relative", color: "var(--text-3)", textAlign: "right" }}>{fCompact(r.total)}</span>
     </div>
   );
   return (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden" }}>
       <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "center", gap: 8, font: "700 15px var(--font)", color: "var(--text-hi)" }}>
         <span>Order book</span>
-        <span title={rows.live ? "Live depth from matching engine" : "No resting orders — simulated depth"}
-          style={{ width: 7, height: 7, borderRadius: "50%", background: rows.live ? "var(--up)" : "var(--text-4)", boxShadow: rows.live ? "0 0 0 3px var(--up-soft)" : "none" }} />
+        <span title={isEmpty ? "No resting orders for this pair yet" : "Live depth from matching engine"}
+          style={{ width: 7, height: 7, borderRadius: "50%", background: isEmpty ? "var(--text-4)" : "var(--up)", boxShadow: isEmpty ? "none" : "0 0 0 3px var(--up-soft)" }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "0 14px 8px", font: "600 10.5px var(--font)", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>
-        <span>Price (USDC)</span><span>Amount</span>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "0 14px 8px", font: "600 10.5px var(--font)", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+        <span>Price (USDC)</span><span style={{ textAlign: "right" }}>Amount ({base})</span><span style={{ textAlign: "right" }}>Total</span>
       </div>
-      <div>{rows.asks.map((r, i) => <Row key={i} r={r} side="ask" />)}</div>
-      <div style={{ padding: "9px 14px", borderTop: "1px solid var(--border-soft)", borderBottom: "1px solid var(--border-soft)", display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ font: "600 16px var(--mono)", color: "var(--up)", fontVariantNumeric: "tabular-nums" }}>{fNum(price, price < 10 ? 4 : 2)}</span>
-        <Icon name="arrowUp" size={14} color="var(--up)" stroke={2.4} />
-        <span style={{ font: "500 12px var(--font)", color: "var(--text-3)" }}>≈ {fUSD(price, price < 10 ? 4 : 2)}</span>
-      </div>
-      <div>{rows.bids.map((r, i) => <Row key={i} r={r} side="bid" />)}</div>
+      {isEmpty ? (
+        <div style={{ padding: "28px 14px", textAlign: "center", color: "var(--text-3)", font: "500 12.5px var(--font)" }}>
+          No resting orders yet.<br />Place a limit order to seed the book.
+        </div>
+      ) : (
+        <>
+          <div>{rows.asks.map((r, i) => <Row key={`a${i}`} r={r} side="ask" />)}</div>
+          <div style={{ padding: "9px 14px", borderTop: "1px solid var(--border-soft)", borderBottom: "1px solid var(--border-soft)", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ font: "600 16px var(--mono)", color: "var(--up)", fontVariantNumeric: "tabular-nums" }}>{fNum(price, price < 10 ? 4 : 2)}</span>
+            <Icon name="arrowUp" size={14} color="var(--up)" stroke={2.4} />
+            <span style={{ font: "500 12px var(--font)", color: "var(--text-3)" }}>≈ {fUSD(price, price < 10 ? 4 : 2)}</span>
+          </div>
+          <div>{rows.bids.map((r, i) => <Row key={`b${i}`} r={r} side="bid" />)}</div>
+        </>
+      )}
     </div>
   );
 }
@@ -157,7 +196,10 @@ function OrderTicket({ coin }: { coin: Coin }) {
   }, [coin.sym]);
 
   const isBuy = side === "buy";
-  const balQuote = 12480.00, balBase = 0.1312;
+  // Real available balances from the wallet (USDC quote, coin base).
+  const { balances } = useBalances();
+  const balQuote = balances["USDC"] ?? balances["USD"] ?? 0;
+  const balBase = balances[coin.sym.toUpperCase()] ?? 0;
   const px = type === "Market" ? coin.price : (parseFloat(price) || coin.price);
   const amt = parseFloat(amount) || 0;
   const total = amt * px;
@@ -171,22 +213,35 @@ function OrderTicket({ coin }: { coin: Coin }) {
 
   const placeOrderMutation = usePlaceOrder();
 
-  // Market orders have no price; everything else must carry one.
-  const isMarket = type === "Market";
-  const priceValue = parseFloat(price);
-  const hasValidPrice = isMarket || (Number.isFinite(priceValue) && priceValue > 0);
-  const canSubmit = amt > 0 && hasValidPrice && !placeOrderMutation.isPending;
+  // Per-type field validity. Each order type carries a different set of prices:
+  //   market      → none
+  //   limit       → limit price
+  //   stop-limit  → limit price + stop (trigger) price
+  //   oco         → take-profit limit price + stop (trigger) price
+  const priceValue = parseFloat(price); // limit price
+  const stopValue = parseFloat(stop);   // trigger price
+  const tpValue = parseFloat(limit);    // OCO take-profit price
+  const pos = (n: number) => Number.isFinite(n) && n > 0;
+  const fieldsValid =
+    type === "Market" ? true :
+    type === "Limit" ? pos(priceValue) :
+    type === "Stop-Limit" ? pos(priceValue) && pos(stopValue) :
+    /* OCO */ pos(tpValue) && pos(stopValue);
+  const canSubmit = amt > 0 && fieldsValid && !placeOrderMutation.isPending;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
+    const req = {
+      pair_id: `${coin.sym}_USDC`,
+      side: side as OrderSide,
+      type: type.toLowerCase() as OrderType,
+      quantity: amt,
+    } as Parameters<typeof placeOrderMutation.mutateAsync>[0];
+    if (type === "Limit") req.price = priceValue;
+    else if (type === "Stop-Limit") { req.price = priceValue; req.stop_price = stopValue; }
+    else if (type === "OCO") { req.price = tpValue; req.stop_price = stopValue; }
     try {
-      await placeOrderMutation.mutateAsync({
-        pair_id: `${coin.sym}_USDC`,
-        side: side as OrderSide,
-        type: type.toLowerCase() as OrderType,
-        quantity: amt,
-        price: isMarket ? undefined : priceValue,
-      });
+      await placeOrderMutation.mutateAsync(req);
       setAmount("");
       setPct(0);
     } catch {
@@ -248,7 +303,7 @@ function OrderTicket({ coin }: { coin: Coin }) {
         )}
         {placeOrderMutation.isSuccess && (
           <div style={{ font: "500 12.5px var(--font)", color: "var(--up)", textAlign: "center" }}>
-            Order placed{placeOrderMutation.data?.Status ? ` · ${placeOrderMutation.data.Status}` : ""}
+            Order placed{placeOrderMutation.data?.status ? ` · ${titleCase(placeOrderMutation.data.status)}` : ""}
           </div>
         )}
         <button onClick={handleSubmit} disabled={!canSubmit} style={{ height: 50, borderRadius: "var(--r-md)", border: "none", cursor: canSubmit ? "pointer" : "not-allowed", background: accent, color: "#fff", font: "700 15px var(--font)", opacity: canSubmit ? 1 : 0.5 }}>
@@ -259,69 +314,83 @@ function OrderTicket({ coin }: { coin: Coin }) {
   );
 }
 
-const OPEN_ORDERS = [
-  { pair: "BTC/USDC", side: "Buy", type: "Limit", price: 62500, amt: 0.05, filled: "0%", time: "10:24" },
-  { pair: "SOL/USDC", side: "Sell", type: "Stop-Limit", price: 152.00, amt: 8, filled: "0%", time: "09:48" },
-];
-const ORDER_HISTORY = [
-  { pair: "ETH/USDC", side: "Buy", type: "Market", price: 3090.12, amt: 0.4, status: "Filled", time: "Jun 10" },
-  { pair: "BTC/USDC", side: "Buy", type: "Limit", price: 61800, amt: 0.05, status: "Filled", time: "Jun 9" },
-  { pair: "DOGE/USDC", side: "Sell", type: "Limit", price: 0.162, amt: 4200, status: "Cancelled", time: "Jun 8" },
-];
-const TRADE_HISTORY = [
-  { pair: "SOL/USDC", side: "Buy", price: 146.20, amt: 12.5, fee: 1.83, time: "Today 10:24" },
-  { pair: "ETH/USDC", side: "Sell", price: 3108.74, amt: 0.4, fee: 1.24, time: "Yesterday" },
-  { pair: "BTC/USDC", side: "Buy", price: 61800, amt: 0.05, fee: 3.09, time: "Jun 9" },
-];
 function OrdersPanel() {
   const [tab, setTab] = useState("open");
-  const tabs: [string, string][] = [["open", "Open Orders"], ["history", "Order History"], ["trades", "Trade History"]];
+  const openQ = useOrders("open");
+  const historyQ = useOrders("closed");
+  const tradesQ = useTrades();
+  const cancelMut = useCancelOrder();
+
+  const openOrders = openQ.data ?? [];
+  const historyOrders = historyQ.data ?? [];
+  const trades = tradesQ.data ?? [];
+
+  const tabs: [string, string, number][] = [
+    ["open", "Open Orders", openOrders.length],
+    ["history", "Order History", historyOrders.length],
+    ["trades", "Trade History", trades.length],
+  ];
   const th: CSSProperties = { textAlign: "left", padding: "12px 20px", font: "600 11px var(--font)", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em" };
   const td: CSSProperties = { padding: "13px 20px", font: "500 13px var(--font)", color: "var(--text-2)" };
   const tdM: CSSProperties = { ...td, fontFamily: "var(--mono)", fontVariantNumeric: "tabular-nums" };
-  const SideTag = ({ s }: { s: string }) => <span style={{ font: "600 12.5px var(--font)", color: s === "Buy" ? "var(--up)" : "var(--down)" }}>{s}</span>;
+  const fillPct = (o: Order) => (o.quantity > 0 ? Math.min(100, Math.round((o.filled_quantity / o.quantity) * 100)) : 0);
+
   return (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
       <div style={{ display: "flex", gap: 26, padding: "0 20px", borderBottom: "1px solid var(--border)" }}>
-        {tabs.map(([id, label]) => (
+        {tabs.map(([id, label, n]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             background: "none", border: "none", cursor: "pointer", padding: "16px 0", font: `${tab === id ? 600 : 500} 13.5px var(--font)`,
             color: tab === id ? "var(--text-hi)" : "var(--text-3)", borderBottom: tab === id ? "2px solid var(--blue)" : "2px solid transparent", marginBottom: -1,
-          }}>{label}{id === "open" ? ` (${OPEN_ORDERS.length})` : ""}</button>
+          }}>{label}{n > 0 ? ` (${n})` : ""}</button>
         ))}
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         {tab === "open" && <>
           <thead><tr>{["Pair", "Side", "Type", "Price", "Amount", "Filled", "Time", ""].map((h, i) => <th key={i} style={{ ...th, textAlign: i > 2 && i < 7 ? "right" : "left" }}>{h}</th>)}</tr></thead>
-          <tbody>{OPEN_ORDERS.map((o, i) => (
-            <tr key={i} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
-              <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{o.pair}</td><td style={td}><SideTag s={o.side} /></td><td style={td}>{o.type}</td>
-              <td style={{ ...tdM, textAlign: "right" }}>{fNum(o.price, o.price < 10 ? 4 : 2)}</td><td style={{ ...tdM, textAlign: "right" }}>{o.amt}</td>
-              <td style={{ ...tdM, textAlign: "right" }}>{o.filled}</td><td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{o.time}</td>
-              <td style={{ ...td, textAlign: "right" }}><button style={{ font: "600 12.5px var(--font)", color: "var(--down)", background: "none", border: "none", cursor: "pointer" }}>Cancel</button></td>
-            </tr>
-          ))}</tbody>
+          <tbody>
+            {openOrders.map((o) => (
+              <tr key={o.order_id} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
+                <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{pairLabel(o.pair_id)}</td><td style={td}><SideTag s={o.side} /></td><td style={td}>{titleCase(o.type)}</td>
+                <td style={{ ...tdM, textAlign: "right" }}>{o.price != null ? fNum(o.price, o.price < 10 ? 4 : 2) : "Market"}</td><td style={{ ...tdM, textAlign: "right" }}>{fNum(o.quantity, 4)}</td>
+                <td style={{ ...tdM, textAlign: "right" }}>{fillPct(o)}%</td><td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{fmtTime(o.created_at)}</td>
+                <td style={{ ...td, textAlign: "right" }}>
+                  <button onClick={() => cancelMut.mutate(o.order_id)} disabled={cancelMut.isPending}
+                    style={{ font: "600 12.5px var(--font)", color: "var(--down)", background: "none", border: "none", cursor: cancelMut.isPending ? "not-allowed" : "pointer", opacity: cancelMut.isPending ? 0.5 : 1 }}>Cancel</button>
+                </td>
+              </tr>
+            ))}
+            {openOrders.length === 0 && <PanelEmpty span={8} loading={openQ.isLoading} text="No open orders." />}
+          </tbody>
         </>}
         {tab === "history" && <>
           <thead><tr>{["Pair", "Side", "Type", "Price", "Amount", "Status", "Time"].map((h, i) => <th key={i} style={{ ...th, textAlign: i > 2 && i < 6 ? "right" : "left" }}>{h}</th>)}</tr></thead>
-          <tbody>{ORDER_HISTORY.map((o, i) => (
-            <tr key={i} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
-              <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{o.pair}</td><td style={td}><SideTag s={o.side} /></td><td style={td}>{o.type}</td>
-              <td style={{ ...tdM, textAlign: "right" }}>{fNum(o.price, o.price < 10 ? 4 : 2)}</td><td style={{ ...tdM, textAlign: "right" }}>{o.amt}</td>
-              <td style={{ ...td, textAlign: "right" }}><span style={{ font: "600 12px var(--font)", color: o.status === "Filled" ? "var(--up)" : "var(--text-3)" }}>{o.status}</span></td>
-              <td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{o.time}</td>
-            </tr>
-          ))}</tbody>
+          <tbody>
+            {historyOrders.map((o) => (
+              <tr key={o.order_id} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
+                <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{pairLabel(o.pair_id)}</td><td style={td}><SideTag s={o.side} /></td><td style={td}>{titleCase(o.type)}</td>
+                <td style={{ ...tdM, textAlign: "right" }}>{o.price != null ? fNum(o.price, o.price < 10 ? 4 : 2) : "Market"}</td><td style={{ ...tdM, textAlign: "right" }}>{fNum(o.quantity, 4)}</td>
+                <td style={{ ...td, textAlign: "right" }}><span style={{ font: "600 12px var(--font)", color: o.status === "filled" ? "var(--up)" : "var(--text-3)" }}>{STATUS_LABEL[o.status] ?? o.status}</span></td>
+                <td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{fmtTime(o.updated_at || o.created_at)}</td>
+              </tr>
+            ))}
+            {historyOrders.length === 0 && <PanelEmpty span={7} loading={historyQ.isLoading} text="No past orders." />}
+          </tbody>
         </>}
         {tab === "trades" && <>
-          <thead><tr>{["Pair", "Side", "Price", "Amount", "Fee", "Time"].map((h, i) => <th key={i} style={{ ...th, textAlign: i > 1 && i < 5 ? "right" : "left" }}>{h}</th>)}</tr></thead>
-          <tbody>{TRADE_HISTORY.map((o, i) => (
-            <tr key={i} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
-              <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{o.pair}</td><td style={td}><SideTag s={o.side} /></td>
-              <td style={{ ...tdM, textAlign: "right" }}>{fNum(o.price, o.price < 10 ? 4 : 2)}</td><td style={{ ...tdM, textAlign: "right" }}>{o.amt}</td>
-              <td style={{ ...tdM, textAlign: "right" }}>{fUSD(o.fee)}</td><td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{o.time}</td>
-            </tr>
-          ))}</tbody>
+          <thead><tr>{["Pair", "Side", "Price", "Amount", "Total", "Role", "Time"].map((h, i) => <th key={i} style={{ ...th, textAlign: i > 1 && i < 5 ? "right" : "left" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {trades.map((t: TradeView) => (
+              <tr key={t.trade_id} className="mkt-row" style={{ borderTop: "1px solid var(--border-soft)" }}>
+                <td style={{ ...td, color: "var(--text-hi)", fontWeight: 600 }}>{pairLabel(t.pair_id)}</td><td style={td}><SideTag s={t.side} /></td>
+                <td style={{ ...tdM, textAlign: "right" }}>{fNum(t.price, t.price < 10 ? 4 : 2)}</td><td style={{ ...tdM, textAlign: "right" }}>{fNum(t.quantity, 4)}</td>
+                <td style={{ ...tdM, textAlign: "right" }}>{fUSD(t.price * t.quantity)}</td>
+                <td style={{ ...td, textAlign: "right", textTransform: "capitalize", color: "var(--text-3)" }}>{t.role}</td>
+                <td style={{ ...tdM, textAlign: "right", color: "var(--text-3)" }}>{fmtTime(t.executed_at)}</td>
+              </tr>
+            ))}
+            {trades.length === 0 && <PanelEmpty span={7} loading={tradesQ.isLoading} text="No trades yet." />}
+          </tbody>
         </>}
       </table>
     </div>
